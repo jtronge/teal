@@ -1,0 +1,11 @@
+[package]
+name = "teal"
+version = "0.0.1"
+edition = "2021"
+
+[[bin]]
+name = "teal"
+path = "teal.rs"
+
+[dependencies]
+teal-window = { path = "./teal-window" }
