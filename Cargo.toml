@@ -8,4 +8,5 @@ name = "teal"
 path = "teal.rs"
 
 [dependencies]
-teal-window = { path = "./teal-window" }
+teal-gui = { path = "./teal-gui" }
+teal-data = { path = "./teal-data" }
