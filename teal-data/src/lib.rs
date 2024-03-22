@@ -9,7 +9,7 @@
 mod pixel;
 pub use pixel::{Pixel, DisplayPixel};
 mod gui;
-pub use gui::DisplayBuffer;
+pub use gui::{DisplayBuffer, Key, Event};
 
 pub struct ImageData {
     /// Width of the image

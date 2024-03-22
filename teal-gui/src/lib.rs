@@ -6,6 +6,7 @@ use gtk4::{Application, ApplicationWindow, GLArea, DrawingArea, Widget, GestureD
 use gtk4::cairo;
 use gtk4::ShortcutsShortcut;
 use glib::signal;
+use teal_data::{Key, Event};
 
 /// Set up the drawing area.
 ///
@@ -47,7 +48,6 @@ where
 
     drawing_area
 }
-
 
 /// Setup controller for gesture dragging.
 fn create_gesture_drag_handler<F>(
@@ -158,39 +158,6 @@ where
     app.run();
 }
 
-#[derive(Debug)]
-pub enum Key {
-    /// An entered key sequence with possible modifiers
-    Sequence {
-        value: char,
-        control: bool,
-        alt: bool,
-    },
-
-    /// Control key pressed by itself
-    PlainControl,
-
-    /// Alt key pressed by itself
-    PlainAlt,
-}
-
-#[derive(Debug)]
-pub enum Event {
-    /// A key press event
-    KeyPress(Key),
-
-    /// Start of a drag gesture
-    DragBegin(f64, f64),
-
-    /// Update drag gesture
-    DragUpdate(f64, f64),
-
-    /// Finish drag gesture
-    DragEnd(f64, f64),
-
-    /// Window resize
-    Resize,
-}
 
 pub struct Context {
     surface: Option<cairo::ImageSurface>,

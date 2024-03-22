@@ -1,8 +1,7 @@
 //! Teal paint
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use teal_data::{DisplayBuffer, Image, ImageData, ImageDisplay, Pixel};
-use teal_gui::Event;
+use teal_data::{DisplayBuffer, Image, ImageData, ImageDisplay, Pixel, Event};
 
 fn fill(image: &mut Image, disp_x: usize, disp_y: usize) {
     let (img_x, img_y) = image.image_coord(disp_x as _, disp_y as _);
