@@ -9,8 +9,11 @@
 mod pixel;
 pub use pixel::{Pixel, DisplayPixel};
 mod gui;
-pub use gui::{DisplayBuffer, Key, Event};
+pub use gui::{GUI, GUIContext, Key, Event};
+mod image;
+pub use image::{Image, ImageView, ScreenBuffer};
 
+/*
 pub struct ImageData {
     /// Width of the image
     pub width: usize,
@@ -107,3 +110,4 @@ impl Image {
         self.data.get(img_x as _, img_y as _).display_pixel()
     }
 }
+*/

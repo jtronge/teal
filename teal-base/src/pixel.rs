@@ -14,10 +14,10 @@ impl Pixel {
     #[inline]
     pub fn display_pixel(&self) -> DisplayPixel {
         DisplayPixel {
-            r: (self.r * (u8::MAX as f64)) as _,
-            g: (self.g * (u8::MAX as f64)) as _,
-            b: (self.b * (u8::MAX as f64)) as _,
-            a: (self.a * (u8::MAX as f64)) as _,
+            r: (self.r * (u8::MAX as f64)) as u8,
+            g: (self.g * (u8::MAX as f64)) as u8,
+            b: (self.b * (u8::MAX as f64)) as u8,
+            a: (self.a * (u8::MAX as f64)) as u8,
         }
     }
 }
