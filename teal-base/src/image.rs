@@ -37,6 +37,7 @@ impl Image {
 
 /// ImageView handles coordinate-conversion between a front-end screen
 /// buffer and backend image data.
+#[derive(Clone, Debug)]
 pub struct ImageView {
     /// X-position of upper left corner of image in view
     disp_corner_x: f64,

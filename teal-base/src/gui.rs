@@ -18,6 +18,7 @@ pub trait GUIContext {
     fn screen(&mut self) -> impl crate::ScreenBuffer;
 }
 
+/// Enum representing various types and sequences of key presses
 #[derive(Debug)]
 pub enum Key {
     /// An entered key sequence with possible modifiers
@@ -34,22 +35,36 @@ pub enum Key {
     PlainAlt,
 }
 
+/// Key event
 #[derive(Debug)]
-pub enum Event {
-    /// A key press event
-    KeyPress(Key),
+pub enum KeyEvent {
+    /// Key press
+    Press(Key),
 
-    /// A key release event
-    KeyRelease(Key),
+    /// Key release
+    Release(Key),
+}
 
+/// Drag event
+#[derive(Debug)]
+pub enum DragEvent {
     /// Start of a drag gesture
-    DragBegin(f64, f64),
+    Begin(f64, f64),
 
     /// Update drag gesture
-    DragUpdate(f64, f64),
+    Update(f64, f64),
 
     /// Finish drag gesture
-    DragEnd(f64, f64),
+    End(f64, f64),
+}
+
+#[derive(Debug)]
+pub enum Event {
+    /// A key event (press or release)
+    Key(KeyEvent),
+
+    /// Drag event motion
+    Drag(DragEvent),
 
     /// Window resize
     Resize,

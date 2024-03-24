@@ -1,8 +1,7 @@
 [package]
-name = "teal-main"
+name = "teal-ops"
 version = "0.0.1"
 edition = "2021"
 
 [dependencies]
 teal-base = { path = "../teal-base" }
-teal-ops = { path = "../teal-ops" }

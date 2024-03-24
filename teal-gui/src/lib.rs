@@ -6,7 +6,7 @@ use gtk4::{Application, ApplicationWindow, GLArea, DrawingArea, Widget, GestureD
 use gtk4::cairo;
 use gtk4::ShortcutsShortcut;
 use glib::signal;
-use teal_base::{Key, Event};
+use teal_base::{Event, DragEvent, KeyEvent, Key};
 
 /// Set up the drawing area.
 ///
@@ -65,7 +65,7 @@ where
         let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
         move |gesture_drag, x, y| {
-            f(&mut *ctx.borrow_mut(), Event::DragBegin(x, y));
+            f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Begin(x, y)));
             drawing_area.queue_draw();
         }
     });
@@ -74,7 +74,7 @@ where
         let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
         move |gesture_drag, x, y| {
-            f(&mut *ctx.borrow_mut(), Event::DragUpdate(x, y));
+            f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Update(x, y)));
             drawing_area.queue_draw();
         }
     });
@@ -83,7 +83,7 @@ where
         let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
         move |gesture_drag, x, y| {
-            f(&mut *ctx.borrow_mut(), Event::DragEnd(x, y));
+            f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::End(x, y)));
             drawing_area.queue_draw();
         }
     });
@@ -140,7 +140,7 @@ where
         let ctx = Rc::clone(&ctx);
         move |_, key, _, modifier| {
             if let Some(key) = parse_key(key, modifier) {
-                f(&mut *ctx.borrow_mut(), Event::KeyPress(key));
+                f(&mut *ctx.borrow_mut(), Event::Key(KeyEvent::Press(key)));
             }
             signal::Propagation::Proceed
         }
@@ -151,7 +151,7 @@ where
         let ctx = Rc::clone(&ctx);
         move |_, key, _, modifier| {
             if let Some(key) = parse_key(key, modifier) {
-                f(&mut *ctx.borrow_mut(), Event::KeyRelease(key));
+                f(&mut *ctx.borrow_mut(), Event::Key(KeyEvent::Release(key)));
             }
         }
     });
