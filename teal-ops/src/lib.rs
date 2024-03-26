@@ -1,4 +1,12 @@
-use teal_base::{Image, ImageView, Operation};
+use teal_base::{Operation, Image, ImageView, ImagePixel};
+use teal_base::image::Pixel;
+
+const ROUND_BRUSH: [[f32; 4]; 4] = [
+    [0.0, 0.4, 0.4, 0.0],
+    [0.4, 1.0, 1.0, 0.4],
+    [0.4, 1.0, 1.0, 0.4],
+    [0.0, 0.4, 0.4, 0.0],
+];
 
 /// Stored representation of a drag gesture
 pub struct DragOp {
@@ -7,6 +15,37 @@ pub struct DragOp {
 
     /// Input drag points (stored as screen points)
     points: Vec<(f64, f64)>,
+
+    /// Pixels for undo operation
+    undo_pixels: Vec<(u32, u32, ImagePixel)>,
+}
+
+/// Fill in a dot around the point from the
+fn fill_dot(image: &mut Image, img_x: u32, img_y: u32, undo_pixels: &mut Vec<(u32, u32, ImagePixel)>) {
+    let img_x: isize = img_x.try_into().unwrap();
+    let img_y: isize = img_y.try_into().unwrap();
+    let half_dim: isize = (ROUND_BRUSH.len() / 2).try_into().unwrap();
+    for (j, row) in ROUND_BRUSH.iter().enumerate() {
+        for (i, value) in row.iter().enumerate() {
+            let i: isize = i.try_into().unwrap();
+            let j: isize = j.try_into().unwrap();
+
+            let x = img_x + i - half_dim;
+            let y = img_y + j - half_dim;
+            if x < 0 || y < 0 {
+                continue;
+            }
+
+            let x: u32 = x.try_into().unwrap();
+            let y: u32 = y.try_into().unwrap();
+
+            if let Some(pixel) = image.get_pixel_mut_checked(x, y) {
+                let undo_pixel = pixel.clone();
+                pixel.blend(&ImagePixel::from([0.0, 0.0, 1.0, *value]));
+                undo_pixels.push((x, y, undo_pixel));
+            }
+        }
+    }
 }
 
 impl DragOp {
@@ -15,6 +54,7 @@ impl DragOp {
         DragOp {
             image_view,
             points: vec![],
+            undo_pixels: vec![],
         }
     }
 
@@ -32,16 +72,7 @@ impl DragOp {
             screen_x as _,
             screen_y as _,
         ) {
-            image.set(
-                img_x,
-                img_y,
-                teal_base::Pixel {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 1.0,
-                    a: 1.0,
-                },
-            );
+            fill_dot(image, img_x, img_y, &mut self.undo_pixels);
         }
 
         self.points.push((off_x, off_y));

@@ -198,6 +198,17 @@ impl teal_base::GUI for GtkGUI {
             );
             drawing_area.add_controller(gesture_click);
 
+            let color_button = gtk4::ColorButton::new();
+            //let grid = gtk4::Grid::new();
+            //grid.insert_row(0);
+            //grid.insert_column(0);
+            //grid.insert_column(0);
+            //grid.insert_column(0);
+            // grid.attach(&*drawing_area, 0, 0, 2, 1);
+            // grid.attach(&color_button, 2, 0, 1, 1);
+            // let box_layout = gtk4::Box::new(gtk4::Orientation::Horizontal, 20);
+            // box_layout.append(&*drawing_area);
+
             let window = ApplicationWindow::builder()
                 .application(app)
                 .title("Teal")
@@ -206,6 +217,8 @@ impl teal_base::GUI for GtkGUI {
             let key_handler = create_key_handler(Rc::clone(&f), Rc::clone(&ctx));
             window.add_controller(key_handler);
             window.set_child(Some(&*drawing_area));
+            // window.set_child(Some(&box_layout));
+            // window.set_child(Some(&grid));
             window.present();
         });
 
@@ -222,15 +235,13 @@ impl teal_base::GUIContext for &mut Context {
     fn screen(&mut self) -> impl teal_base::ScreenBuffer {
         let format = cairo::Format::Rgb24;
         let surface = self.surface.as_mut().unwrap();
-        let stride: usize = format
+        let stride = format
             .stride_for_width(surface.width().try_into().unwrap())
-            .unwrap()
-            .try_into()
             .unwrap();
         Screen {
             width: surface.width().try_into().unwrap(),
             height: surface.height().try_into().unwrap(),
-            stride,
+            stride: stride.try_into().unwrap(),
             surface_data: surface.data().unwrap(),
         }
     }
@@ -238,26 +249,27 @@ impl teal_base::GUIContext for &mut Context {
 
 /// Screen type that can be updated by the backend.
 pub struct Screen<'a> {
-    width: usize,
-    height: usize,
-    stride: usize,
+    width: u32,
+    height: u32,
+    stride: u32,
     surface_data: cairo::ImageSurfaceData<'a>,
 }
 
 impl<'a> teal_base::ScreenBuffer for Screen<'a> {
     #[inline]
-    fn width(&self) -> usize {
+    fn width(&self) -> u32 {
         self.width
     }
 
     #[inline]
-    fn height(&self) -> usize {
+    fn height(&self) -> u32 {
         self.height
     }
 
     #[inline]
-    fn set(&mut self, x: usize, y: usize, pixel: teal_base::DisplayPixel) {
-        let pos = y * self.stride;
+    fn set(&mut self, x: u32, y: u32, pixel: teal_base::DisplayPixel) {
+        let pos: usize = (y * self.stride).try_into().unwrap();
+        let x: usize = x.try_into().unwrap();
         self.surface_data[pos + x * 4] = pixel.b;
         self.surface_data[pos + x * 4 + 1] = pixel.g;
         self.surface_data[pos + x * 4 + 2] = pixel.r;

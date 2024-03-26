@@ -1,37 +1,28 @@
 //! Base image data structures and related traits.
-use crate::{Pixel, DisplayPixel};
 
-/// Backend image representation.
-pub struct Image {
-    /// Width of the image
-    pub width: usize,
+/// Image pixel type
+pub type ImagePixel = image::Rgba<f32>;
 
-    /// Height of the image
-    pub height: usize,
+/// Main image type
+pub type Image = image::ImageBuffer<ImagePixel, Vec<<Pixel as image::Pixel>::Subpixel>>;
 
-    /// Pixel data in [r, g, b, a] form
-    pixels: Vec<Pixel>,
+/// Pixel to be used for display.
+#[derive(Clone, Debug)]
+pub struct DisplayPixel {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
-impl Image {
-    pub fn new(width: usize, height: usize, pixel: Pixel) -> Image {
-        Image {
-            width,
-            height,
-            pixels: vec![pixel; width * height],
+impl DisplayPixel {
+    /// Do a lossy conversion from the image pixel type.
+    fn from_image_pixel(pixel: &ImagePixel) -> DisplayPixel {
+        DisplayPixel {
+            r: (pixel.0[0] * (u8::MAX as f32)) as u8,
+            g: (pixel.0[1] * (u8::MAX as f32)) as u8,
+            b: (pixel.0[2] * (u8::MAX as f32)) as u8,
+            // The alpha channel is ignored
         }
-    }
-
-    /// Set a pixel value at (x, y).
-    #[inline]
-    pub fn set(&mut self, x: usize, y: usize, pixel: Pixel) {
-        self.pixels[y * self.width + x] = pixel;
-    }
-
-    /// Get a pixel value at (x, y).
-    #[inline]
-    pub fn get(&self, x: usize, y: usize) -> &Pixel {
-        &self.pixels[y * self.width + x]
     }
 }
 
@@ -50,10 +41,10 @@ pub struct ImageView {
 }
 
 /// Checkerboard pattern square dimension
-pub const CHECKERBOARD_DIM: usize = 20;
+pub const CHECKERBOARD_DIM: u32 = 20;
 
 /// Produce a procedural checkerboard, used for empty parts of the screen.
-fn checkerboard(screen_x: usize, screen_y: usize) -> DisplayPixel {
+fn checkerboard(screen_x: u32, screen_y: u32) -> DisplayPixel {
     let x = screen_x / CHECKERBOARD_DIM;
     let y = screen_y / CHECKERBOARD_DIM;
 
@@ -62,14 +53,12 @@ fn checkerboard(screen_x: usize, screen_y: usize) -> DisplayPixel {
             r: 0,
             g: 128,
             b: 128,
-            a: 255,
         }
     } else {
         DisplayPixel {
             r: 0,
             g: 255,
             b: 255,
-            a: 255,
         }
     }
 }
@@ -79,7 +68,7 @@ impl ImageView {
         ImageView {
             disp_corner_x: 0.0,
             disp_corner_y: 0.0,
-            conversion_factor: 1.0,
+            conversion_factor: 0.2,
         }
     }
 
@@ -87,9 +76,9 @@ impl ImageView {
     pub fn get_image_coords(
         &self,
         image: &Image,
-        screen_x: usize,
-        screen_y: usize,
-    ) -> Option<(usize, usize)> {
+        screen_x: u32,
+        screen_y: u32,
+    ) -> Option<(u32, u32)> {
         let x = screen_x as f64;
         let y = screen_y as f64;
 
@@ -100,11 +89,11 @@ impl ImageView {
 
         let img_x = x * self.conversion_factor;
         let img_y = y * self.conversion_factor;
-        let img_x = img_x as usize;
-        let img_y = img_y as usize;
+        let img_x = img_x as u32;
+        let img_y = img_y as u32;
 
         // Check if this coordinate is outside the image
-        if img_x >= image.width || img_y >= image.height {
+        if img_x >= image.width() || img_y >= image.height() {
             return None;
         }
 
@@ -115,15 +104,15 @@ impl ImageView {
     pub fn get_display_pixel(
         &self,
         image: &Image,
-        screen_x: usize,
-        screen_y: usize,
+        screen_x: u32,
+        screen_y: u32,
     ) -> DisplayPixel {
         if let Some((img_x, img_y)) = self.get_image_coords(
             image,
             screen_x,
             screen_y,
         ) {
-            image.get(img_x, img_y).display_pixel()
+            DisplayPixel::from_image_pixel(image.get_pixel(img_x, img_y))
         } else {
             checkerboard(screen_x, screen_y)
         }
@@ -154,7 +143,7 @@ impl ImageView {
 /// This trait is used to abstract different types of screen buffers that may
 /// be provided by different GUIs.
 pub trait ScreenBuffer {
-    fn width(&self) -> usize;
-    fn height(&self) -> usize;
-    fn set(&mut self, x: usize, y: usize, pixel: DisplayPixel);
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    fn set(&mut self, x: u32, y: u32, pixel: DisplayPixel);
 }

@@ -1,11 +1,8 @@
 //! Teal paint
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use teal_base::{GUIContext, Image, ImageView, GUI, Pixel, Event, DragEvent, KeyEvent, Key, ScreenBuffer, Operation};
+use teal_base::{GUIContext, Image, ImageView, GUI, Event, DragEvent, KeyEvent, Key, ScreenBuffer, Operation};
 use teal_ops::DragOp;
-
-fn fill(image: &mut Image, image_view: &ImageView, screen_x: usize, screen_y: usize) {
-}
 
 /// Handle a key event.
 fn handle_key_event(key_event: KeyEvent) {
@@ -48,16 +45,7 @@ pub struct Application {
 
 impl Application {
     fn new() -> Application {
-        let image = Image::new(
-            1024,
-            1024,
-            Pixel {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            },
-        );
+        let image = Image::new(1024, 1024);
         Application {
             image,
             image_view: ImageView::new(),
