@@ -1,10 +1,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use gtk4::prelude::*;
-use gtk4::subclass::widget::WidgetClassExt;
-use gtk4::{Application, ApplicationWindow, GLArea, DrawingArea, Widget, GestureDrag, GestureClick, EventControllerKey};
+use gtk4::{Application, ApplicationWindow, DrawingArea, GestureDrag, GestureClick, EventControllerKey};
 use gtk4::cairo;
-use gtk4::ShortcutsShortcut;
 use glib::signal;
 use teal_base::{Event, DragEvent, KeyEvent, Key};
 
@@ -21,13 +19,13 @@ where
     drawing_area.connect_resize({
         let ctx = Rc::clone(&ctx);
         let f = Rc::clone(&f);
-        move |area, width, height| {
+        move |_, width, height| {
             let surface = cairo::ImageSurface::create(
                 cairo::Format::Rgb24,
                 width,
                 height,
             ).unwrap();
-            ctx.borrow_mut().surface.insert(surface);
+            let _ = ctx.borrow_mut().surface.insert(surface);
             f(&mut *ctx.borrow_mut(), Event::Resize);
         }
     });
@@ -35,16 +33,35 @@ where
     // Do actual drawing from the surface stored in the context
     drawing_area.set_draw_func({
         let ctx = Rc::clone(&ctx);
-        move |area, cairo_ctx, a, b| {
-            let mut ctx_ref = ctx.borrow();
-            cairo_ctx.set_source_surface(
+        move |_, cairo_ctx, _, _| {
+            let ctx_ref = ctx.borrow();
+            let _ = cairo_ctx.set_source_surface(
                 &ctx_ref.surface.as_ref().unwrap(),
                 0.0,
                 0.0,
             );
-            cairo_ctx.paint().unwrap();
+            let _ = cairo_ctx.paint().unwrap();
         }
     });
+
+    // Handle gestures
+    let gesture_drag = create_gesture_drag_handler(
+        Rc::clone(&f),
+        Rc::clone(&ctx),
+        Rc::clone(&drawing_area),
+    );
+    drawing_area.add_controller(gesture_drag);
+    let gesture_click = create_gesture_click_handler(
+        Rc::clone(&f),
+        Rc::clone(&ctx),
+        Rc::clone(&drawing_area),
+    );
+    drawing_area.add_controller(gesture_click);
+
+    // IMPORTANT: hexpand and vexpand are needed to show up in the grid layout
+    // later
+    drawing_area.set_hexpand(true);
+    drawing_area.set_vexpand(true);
 
     drawing_area
 }
@@ -64,7 +81,7 @@ where
         let f = Rc::clone(&f);
         let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
-        move |gesture_drag, x, y| {
+        move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Begin(x, y)));
             drawing_area.queue_draw();
         }
@@ -73,7 +90,7 @@ where
         let f = Rc::clone(&f);
         let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
-        move |gesture_drag, x, y| {
+        move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Update(x, y)));
             drawing_area.queue_draw();
         }
@@ -82,7 +99,7 @@ where
         let f = Rc::clone(&f);
         let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
-        move |gesture_drag, x, y| {
+        move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::End(x, y)));
             drawing_area.queue_draw();
         }
@@ -93,9 +110,9 @@ where
 
 /// Create a gesture click handler
 fn create_gesture_click_handler<F>(
-    f: Rc<F>,
-    ctx: Rc<RefCell<Context>>,
-    drawing_area: Rc<DrawingArea>,
+    _f: Rc<F>,
+    _ctx: Rc<RefCell<Context>>,
+    _drawing_area: Rc<DrawingArea>,
 ) -> GestureClick {
     let gesture_click = GestureClick::new();
     gesture_click.connect_pressed(|_, i, a, b| {
@@ -127,7 +144,7 @@ fn parse_key(key: gdk4::Key, modifier: gdk4::ModifierType) -> Option<Key> {
     }
 }
 
-/// Create the key handler
+/// Create the key handler.
 fn create_key_handler<F>(f: Rc<F>, ctx: Rc<RefCell<Context>>) -> EventControllerKey
 where
     F: Fn(&mut Context, Event) + 'static,
@@ -159,6 +176,33 @@ where
     key_handler
 }
 
+/// Create the main color picker.
+fn create_color_picker<F>(f: Rc<F>, ctx: Rc<RefCell<Context>>) -> gtk4::ColorButton
+where
+    F: Fn(&mut Context, Event) + 'static,
+{
+    // NOTE: ColorButton is deprecated, need to use ColorDialogButton,
+    // but only available for newer versions of gtk 4.x
+    let color_button = gtk4::ColorButton::new();
+
+    color_button.connect_color_set({
+        let ctx = Rc::clone(&ctx);
+        let f = Rc::clone(&f);
+        move |color_button| {
+            let rgba = color_button.rgba();
+            let event = Event::ColorUpdate {
+                r: rgba.red(),
+                g: rgba.green(),
+                b: rgba.blue(),
+                a: rgba.alpha(),
+            };
+            f(&mut *ctx.borrow_mut(), event);
+        }
+    });
+
+    color_button
+}
+
 pub struct GtkGUI;
 
 impl GtkGUI {
@@ -170,7 +214,7 @@ impl GtkGUI {
 impl teal_base::GUI for GtkGUI {
     type Context<'a> = &'a mut Context;
 
-    fn run<F>(&mut self, f: F)
+    fn run<F>(&mut self, _options: teal_base::GUIOptions, f: F)
     where
         F: Fn(Self::Context<'_>, Event) + 'static,
     {
@@ -183,31 +227,17 @@ impl teal_base::GUI for GtkGUI {
         let f = Rc::new(f);
 
         app.connect_activate(move |app| {
-            // Set up the drawing area and attach controllers
+            let grid = gtk4::Grid::new();
             let drawing_area = create_drawing_area(Rc::clone(&f), Rc::clone(&ctx));
-            let gesture_drag = create_gesture_drag_handler(
-                Rc::clone(&f),
-                Rc::clone(&ctx),
-                Rc::clone(&drawing_area),
-            );
-            drawing_area.add_controller(gesture_drag);
-            let gesture_click = create_gesture_click_handler(
-                Rc::clone(&f),
-                Rc::clone(&ctx),
-                Rc::clone(&drawing_area),
-            );
-            drawing_area.add_controller(gesture_click);
-
-            let color_button = gtk4::ColorButton::new();
-            //let grid = gtk4::Grid::new();
-            //grid.insert_row(0);
-            //grid.insert_column(0);
-            //grid.insert_column(0);
-            //grid.insert_column(0);
-            // grid.attach(&*drawing_area, 0, 0, 2, 1);
-            // grid.attach(&color_button, 2, 0, 1, 1);
-            // let box_layout = gtk4::Box::new(gtk4::Orientation::Horizontal, 20);
-            // box_layout.append(&*drawing_area);
+            grid.attach(&*drawing_area, 0, 0, 10, 10);
+            let color_picker = create_color_picker(Rc::clone(&f), Rc::clone(&ctx));
+            color_picker.set_valign(gtk4::Align::Start);
+            let button = gtk4::Button::with_label("Una prova");
+            button.set_valign(gtk4::Align::Start);
+            let box_layout = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+            box_layout.append(&color_picker);
+            box_layout.append(&button);
+            grid.attach(&box_layout, 10, 0, 1, 1);
 
             let window = ApplicationWindow::builder()
                 .application(app)
@@ -216,9 +246,7 @@ impl teal_base::GUI for GtkGUI {
             let window = Rc::new(window);
             let key_handler = create_key_handler(Rc::clone(&f), Rc::clone(&ctx));
             window.add_controller(key_handler);
-            window.set_child(Some(&*drawing_area));
-            // window.set_child(Some(&box_layout));
-            // window.set_child(Some(&grid));
+            window.set_child(Some(&grid));
             window.present();
         });
 

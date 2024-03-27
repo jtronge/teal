@@ -10,7 +10,7 @@
 pub use image;
 
 mod gui;
-pub use gui::{GUI, GUIContext, Event, DragEvent, KeyEvent, Key};
+pub use gui::{GUI, GUIOptions, GUIContext, Event, DragEvent, KeyEvent, Key};
 
 /// An operation to be applied to an image.
 pub trait Operation {

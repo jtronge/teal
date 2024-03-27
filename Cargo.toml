@@ -1,3 +1,11 @@
+[workspace]
+members = [
+    "teal-base",
+    "teal-main",
+    "teal-ops",
+    "teal-gui",
+]
+
 [package]
 name = "teal"
 version = "0.0.1"

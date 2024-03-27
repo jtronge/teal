@@ -80,11 +80,11 @@ impl DragOp {
 }
 
 impl Operation for DragOp {
-    fn execute(&self, image: &mut Image) {
+    fn execute(&self, _image: &mut Image) {
         // TODO
     }
 
-    fn unexecute(&self, image: &mut Image) {
+    fn unexecute(&self, _image: &mut Image) {
         // TODO
     }
 }

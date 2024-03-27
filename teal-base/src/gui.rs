@@ -1,14 +1,16 @@
 //! Generic GUI traits and data structures.
-use crate::DisplayPixel;
+
+/// Options for the GUI.
+pub struct GUIOptions {}
 
 /// Main GUI abstraction.
 ///
-/// See https://stackoverflow.com/questions/50090578/how-to-write-a-trait-bound-for-a-reference-to-an-associated-type-on-the-trait-it
+/// See <https://stackoverflow.com/questions/50090578/how-to-write-a-trait-bound-for-a-reference-to-an-associated-type-on-the-trait-it>
 /// for more info on the trait bound.
 pub trait GUI {
     type Context<'a>: GUIContext;
 
-    fn run<F: Fn(Self::Context<'_>, Event) + 'static>(&mut self, f: F);
+    fn run<F: Fn(Self::Context<'_>, Event) + 'static>(&mut self, options: GUIOptions, f: F);
 }
 
 /// GUI context for interacting with the GUI front end.
@@ -65,6 +67,14 @@ pub enum Event {
 
     /// Drag event motion
     Drag(DragEvent),
+
+    /// A new color was chosen
+    ColorUpdate {
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+    },
 
     /// Window resize
     Resize,

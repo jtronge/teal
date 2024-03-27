@@ -1,7 +1,7 @@
 //! Teal paint
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
-use teal_base::{GUIContext, Image, ImageView, GUI, Event, DragEvent, KeyEvent, Key, ScreenBuffer, Operation};
+use teal_base::{GUIContext, GUIOptions, Image, ImageView, ImagePixel, GUI, Event, DragEvent, KeyEvent, Key, ScreenBuffer, Operation};
 use teal_ops::DragOp;
 
 /// Handle a key event.
@@ -26,6 +26,9 @@ pub struct InputState {
 
     /// Holds current key press, removed when released
     key: Option<Key>,
+
+    /// Current color
+    color: Option<ImagePixel>
 }
 
 /// Application data
@@ -52,6 +55,7 @@ impl Application {
             input_state: InputState {
                 drag: None,
                 key: None,
+                color: None,
             },
             operations: vec![],
         }
@@ -67,6 +71,10 @@ impl Application {
             }
             Event::Drag(drag_event) => {
                 self.handle_drag_event(drag_event, ctx.screen());
+            }
+            Event::ColorUpdate { r, g, b, a } => {
+                println!("color update: {} {} {} {}", r, g, b, a);
+                let _ = self.input_state.color.insert(ImagePixel::from([r, g, b, a]));
             }
             Event::Resize => {
                 self.image_view.update_screen(&self.image, ctx.screen());
@@ -86,7 +94,7 @@ impl Application {
                 let mut drag_op = DragOp::new(self.image_view.clone());
                 drag_op.update(&mut self.image, start_x, start_y);
                 self.image_view.update_screen(&self.image, screen);
-                self.input_state.drag.insert(drag_op);
+                let _ = self.input_state.drag.insert(drag_op);
             }
             DragEvent::Update(x, y) => {
                 let drag_op = self
@@ -117,8 +125,9 @@ impl Application {
 pub fn run<G: GUI>(mut gui: G) {
     let app = Rc::new(RefCell::new(Application::new()));
 
+    let options = GUIOptions {};
     // TODO: Simply update the screen with changes to an image made from here
-    gui.run(move |mut ctx, event| {
+    gui.run(options, move |ctx, event| {
         app.borrow_mut().handle_event(ctx, event);
     });
 }
