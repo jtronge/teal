@@ -69,12 +69,7 @@ pub enum Event {
     Drag(DragEvent),
 
     /// A new color was chosen
-    ColorUpdate {
-        r: f32,
-        g: f32,
-        b: f32,
-        a: f32,
-    },
+    ColorUpdate { r: f32, g: f32, b: f32, a: f32 },
 
     /// Window resize
     Resize,

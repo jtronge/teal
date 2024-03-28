@@ -10,16 +10,7 @@
 pub use image;
 
 mod gui;
-pub use gui::{GUI, GUIOptions, GUIContext, Event, DragEvent, KeyEvent, Key};
-
-/// An operation to be applied to an image.
-pub trait Operation {
-    /// Run the operation
-    fn execute(&self, image: &mut Image);
-
-    /// Undo the operation
-    fn unexecute(&self, image: &mut Image);
-}
+pub use gui::{DragEvent, Event, GUIContext, GUIOptions, Key, KeyEvent, GUI};
 
 /// Image pixel type
 pub type ImagePixel = image::Rgba<f32>;
@@ -122,17 +113,8 @@ impl ImageView {
     }
 
     /// Get a display pixel for the screen coordinates.
-    pub fn get_display_pixel(
-        &self,
-        image: &Image,
-        screen_x: u32,
-        screen_y: u32,
-    ) -> DisplayPixel {
-        if let Some((img_x, img_y)) = self.get_image_coords(
-            image,
-            screen_x,
-            screen_y,
-        ) {
+    pub fn get_display_pixel(&self, image: &Image, screen_x: u32, screen_y: u32) -> DisplayPixel {
+        if let Some((img_x, img_y)) = self.get_image_coords(image, screen_x, screen_y) {
             DisplayPixel::from_image_pixel(image.get_pixel(img_x, img_y))
         } else {
             checkerboard(screen_x, screen_y)
@@ -150,7 +132,13 @@ impl ImageView {
         }
     }
 
-    pub fn image_coord(&self, img_width: f64, img_height: f64, disp_x: f64, disp_y: f64) -> (f64, f64) {
+    pub fn image_coord(
+        &self,
+        img_width: f64,
+        img_height: f64,
+        disp_x: f64,
+        disp_y: f64,
+    ) -> (f64, f64) {
         let x = disp_x * self.conversion_factor;
         let x = if x >= img_width { img_width - 1.0 } else { x };
         let y = disp_y * self.conversion_factor;

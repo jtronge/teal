@@ -1,10 +1,12 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, DrawingArea, GestureDrag, GestureClick, EventControllerKey};
-use gtk4::cairo;
 use glib::signal;
-use teal_base::{Event, DragEvent, KeyEvent, Key};
+use gtk4::cairo;
+use gtk4::prelude::*;
+use gtk4::{
+    Application, ApplicationWindow, DrawingArea, EventControllerKey, GestureClick, GestureDrag,
+};
+use std::cell::RefCell;
+use std::rc::Rc;
+use teal_base::{DragEvent, Event, Key, KeyEvent};
 
 /// Set up the drawing area.
 ///
@@ -20,11 +22,7 @@ where
         let ctx = Rc::clone(&ctx);
         let f = Rc::clone(&f);
         move |_, width, height| {
-            let surface = cairo::ImageSurface::create(
-                cairo::Format::Rgb24,
-                width,
-                height,
-            ).unwrap();
+            let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, width, height).unwrap();
             let _ = ctx.borrow_mut().surface.insert(surface);
             f(&mut *ctx.borrow_mut(), Event::Resize);
         }
@@ -35,27 +33,17 @@ where
         let ctx = Rc::clone(&ctx);
         move |_, cairo_ctx, _, _| {
             let ctx_ref = ctx.borrow();
-            let _ = cairo_ctx.set_source_surface(
-                &ctx_ref.surface.as_ref().unwrap(),
-                0.0,
-                0.0,
-            );
+            let _ = cairo_ctx.set_source_surface(&ctx_ref.surface.as_ref().unwrap(), 0.0, 0.0);
             let _ = cairo_ctx.paint().unwrap();
         }
     });
 
     // Handle gestures
-    let gesture_drag = create_gesture_drag_handler(
-        Rc::clone(&f),
-        Rc::clone(&ctx),
-        Rc::clone(&drawing_area),
-    );
+    let gesture_drag =
+        create_gesture_drag_handler(Rc::clone(&f), Rc::clone(&ctx), Rc::clone(&drawing_area));
     drawing_area.add_controller(gesture_drag);
-    let gesture_click = create_gesture_click_handler(
-        Rc::clone(&f),
-        Rc::clone(&ctx),
-        Rc::clone(&drawing_area),
-    );
+    let gesture_click =
+        create_gesture_click_handler(Rc::clone(&f), Rc::clone(&ctx), Rc::clone(&drawing_area));
     drawing_area.add_controller(gesture_click);
 
     // IMPORTANT: hexpand and vexpand are needed to show up in the grid layout
@@ -221,9 +209,7 @@ impl teal_base::GUI for GtkGUI {
         let app = Application::builder()
             .application_id("org.teal.Teal")
             .build();
-        let ctx = Rc::new(RefCell::new(Context {
-            surface: None,
-        }));
+        let ctx = Rc::new(RefCell::new(Context { surface: None }));
         let f = Rc::new(f);
 
         app.connect_activate(move |app| {

@@ -1,8 +1,11 @@
 //! Teal paint
 use std::cell::RefCell;
 use std::rc::Rc;
-use teal_base::{GUIContext, GUIOptions, Image, ImageView, ImagePixel, GUI, Event, DragEvent, KeyEvent, Key, ScreenBuffer, Operation};
-use teal_ops::DragOp;
+use teal_base::{
+    DragEvent, Event, GUIContext, GUIOptions, Image, ImagePixel, ImageView, Key, KeyEvent,
+    ScreenBuffer, GUI,
+};
+use teal_ops::{Operation, DragOp};
 
 /// Handle a key event.
 fn handle_key_event(key_event: KeyEvent) {
@@ -28,7 +31,7 @@ pub struct InputState {
     key: Option<Key>,
 
     /// Current color
-    color: Option<ImagePixel>
+    color: Option<ImagePixel>,
 }
 
 /// Application data
@@ -48,7 +51,7 @@ pub struct Application {
 
 impl Application {
     fn new() -> Application {
-        let image = Image::new(1024, 1024);
+        let image = Image::new(256, 256);
         Application {
             image,
             image_view: ImageView::new(),
@@ -74,7 +77,10 @@ impl Application {
             }
             Event::ColorUpdate { r, g, b, a } => {
                 println!("color update: {} {} {} {}", r, g, b, a);
-                let _ = self.input_state.color.insert(ImagePixel::from([r, g, b, a]));
+                let _ = self
+                    .input_state
+                    .color
+                    .insert(ImagePixel::from([r, g, b, a]));
             }
             Event::Resize => {
                 self.image_view.update_screen(&self.image, ctx.screen());
@@ -83,20 +89,23 @@ impl Application {
     }
 
     /// Handle a drag event.
-    fn handle_drag_event(
-        &mut self,
-        drag_event: DragEvent,
-        screen: impl ScreenBuffer,
-    ) {
+    fn handle_drag_event(&mut self, drag_event: DragEvent, screen: impl ScreenBuffer) {
         println!("number of completed operations: {}", self.operations.len());
         match drag_event {
             DragEvent::Begin(start_x, start_y) => {
-                let mut drag_op = DragOp::new(self.image_view.clone());
-                drag_op.update(&mut self.image, start_x, start_y);
+                println!("BEGIN");
+                let color = if let Some(color) = self.input_state.color.as_ref() {
+                    color.clone()
+                } else {
+                    ImagePixel::from([1.0, 1.0, 1.0, 1.0])
+                };
+                let mut drag_op = DragOp::new(self.image_view.clone(), color);
+                drag_op.start(&mut self.image, start_x, start_y);
                 self.image_view.update_screen(&self.image, screen);
                 let _ = self.input_state.drag.insert(drag_op);
             }
             DragEvent::Update(x, y) => {
+                println!("UPDATE");
                 let drag_op = self
                     .input_state
                     .drag
@@ -106,12 +115,13 @@ impl Application {
                 self.image_view.update_screen(&self.image, screen);
             }
             DragEvent::End(x, y) => {
+                println!("END");
                 let mut drag_op = self
                     .input_state
                     .drag
                     .take()
                     .expect("encountered unexpected drag end");
-                drag_op.update(&mut self.image, x, y);
+                drag_op.finish(&mut self.image, x, y);
                 // Drag operation completed, save it for undo later
                 self.operations.push(Box::new(drag_op));
                 self.image_view.update_screen(&self.image, screen);
