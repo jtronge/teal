@@ -18,3 +18,4 @@ path = "teal.rs"
 [dependencies]
 teal-main = { path = "./teal-main" }
 teal-gui = { path = "./teal-gui" }
+toml = "0.8.12"

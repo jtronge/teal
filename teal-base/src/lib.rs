@@ -38,20 +38,6 @@ impl DisplayPixel {
     }
 }
 
-/// ImageView handles coordinate-conversion between a front-end screen
-/// buffer and backend image data.
-#[derive(Clone, Debug)]
-pub struct ImageView {
-    /// X-position of upper left corner of image in view
-    disp_corner_x: f64,
-
-    /// Y-position of upper left corner of image in view
-    disp_corner_y: f64,
-
-    /// Conversion factor from display coordinates to image coordinates
-    conversion_factor: f64,
-}
-
 /// Checkerboard pattern square dimension
 pub const CHECKERBOARD_DIM: u32 = 20;
 
@@ -75,6 +61,20 @@ fn checkerboard(screen_x: u32, screen_y: u32) -> DisplayPixel {
     }
 }
 
+/// ImageView handles coordinate-conversion between a front-end screen
+/// buffer and backend image data.
+#[derive(Clone, Debug)]
+pub struct ImageView {
+    /// X-position of upper left corner of image in view
+    disp_corner_x: f64,
+
+    /// Y-position of upper left corner of image in view
+    disp_corner_y: f64,
+
+    /// Conversion factor from display coordinates to image coordinates
+    conversion_factor: f64,
+}
+
 impl ImageView {
     pub fn new() -> ImageView {
         ImageView {
@@ -85,7 +85,7 @@ impl ImageView {
     }
 
     /// Get the image coordinates. Return None on out of bounds.
-    pub fn get_image_coords(
+    pub fn get_image_coords_u_checked(
         &self,
         image: &Image,
         screen_x: u32,
@@ -112,9 +112,21 @@ impl ImageView {
         Some((img_x, img_y))
     }
 
+    /// Get the image coordinates, unchecked and floating-point version.
+    pub fn get_image_coords_f(
+        &self,
+        image: &Image,
+        screen_x: f64,
+        screen_y: f64,
+    ) -> (f64, f64) {
+       (screen_x * self.conversion_factor, screen_y * self.conversion_factor)
+    }
+
     /// Get a display pixel for the screen coordinates.
     pub fn get_display_pixel(&self, image: &Image, screen_x: u32, screen_y: u32) -> DisplayPixel {
-        if let Some((img_x, img_y)) = self.get_image_coords(image, screen_x, screen_y) {
+        if let Some((img_x, img_y))
+            = self.get_image_coords_u_checked(image, screen_x, screen_y)
+        {
             DisplayPixel::from_image_pixel(image.get_pixel(img_x, img_y))
         } else {
             checkerboard(screen_x, screen_y)
@@ -130,20 +142,6 @@ impl ImageView {
                 screen.set(x, y, pixel);
             }
         }
-    }
-
-    pub fn image_coord(
-        &self,
-        img_width: f64,
-        img_height: f64,
-        disp_x: f64,
-        disp_y: f64,
-    ) -> (f64, f64) {
-        let x = disp_x * self.conversion_factor;
-        let x = if x >= img_width { img_width - 1.0 } else { x };
-        let y = disp_y * self.conversion_factor;
-        let y = if y >= img_height { img_height - 1.0 } else { y };
-        (x, y)
     }
 }
 

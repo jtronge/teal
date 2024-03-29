@@ -16,8 +16,10 @@ where
     F: Fn(&mut Context, Event) + 'static,
 {
     let drawing_area = Rc::new(DrawingArea::new());
+    // Save the drawing area for queue_draw() calls later.
+    let _ = ctx.borrow_mut().drawing_area.insert(Rc::clone(&drawing_area));
 
-    // Handle a resize
+    // Handle a resize.
     drawing_area.connect_resize({
         let ctx = Rc::clone(&ctx);
         let f = Rc::clone(&f);
@@ -28,7 +30,7 @@ where
         }
     });
 
-    // Do actual drawing from the surface stored in the context
+    // Do actual drawing from the surface stored in the context.
     drawing_area.set_draw_func({
         let ctx = Rc::clone(&ctx);
         move |_, cairo_ctx, _, _| {
@@ -38,7 +40,7 @@ where
         }
     });
 
-    // Handle gestures
+    // Handle gestures.
     let gesture_drag =
         create_gesture_drag_handler(Rc::clone(&f), Rc::clone(&ctx), Rc::clone(&drawing_area));
     drawing_area.add_controller(gesture_drag);
@@ -47,7 +49,7 @@ where
     drawing_area.add_controller(gesture_click);
 
     // IMPORTANT: hexpand and vexpand are needed to show up in the grid layout
-    // later
+    // later.
     drawing_area.set_hexpand(true);
     drawing_area.set_vexpand(true);
 
@@ -71,7 +73,6 @@ where
         let ctx = Rc::clone(&ctx);
         move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Begin(x, y)));
-            drawing_area.queue_draw();
         }
     });
     gesture_drag.connect_drag_update({
@@ -80,7 +81,6 @@ where
         let ctx = Rc::clone(&ctx);
         move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Update(x, y)));
-            drawing_area.queue_draw();
         }
     });
     gesture_drag.connect_drag_end({
@@ -89,7 +89,6 @@ where
         let ctx = Rc::clone(&ctx);
         move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::End(x, y)));
-            drawing_area.queue_draw();
         }
     });
 
@@ -139,7 +138,7 @@ where
 {
     let key_handler = EventControllerKey::new();
 
-    // Set up short cuts
+    // Set up short cuts.
     key_handler.connect_key_pressed({
         let f = Rc::clone(&f);
         let ctx = Rc::clone(&ctx);
@@ -170,7 +169,7 @@ where
     F: Fn(&mut Context, Event) + 'static,
 {
     // NOTE: ColorButton is deprecated, need to use ColorDialogButton,
-    // but only available for newer versions of gtk 4.x
+    // but only available for newer versions of gtk 4.x.
     let color_button = gtk4::ColorButton::new();
 
     color_button.connect_color_set({
@@ -209,7 +208,7 @@ impl teal_base::GUI for GtkGUI {
         let app = Application::builder()
             .application_id("org.teal.Teal")
             .build();
-        let ctx = Rc::new(RefCell::new(Context { surface: None }));
+        let ctx = Rc::new(RefCell::new(Context { drawing_area: None, surface: None }));
         let f = Rc::new(f);
 
         app.connect_activate(move |app| {
@@ -218,11 +217,12 @@ impl teal_base::GUI for GtkGUI {
             grid.attach(&*drawing_area, 0, 0, 10, 10);
             let color_picker = create_color_picker(Rc::clone(&f), Rc::clone(&ctx));
             color_picker.set_valign(gtk4::Align::Start);
-            let button = gtk4::Button::with_label("Una prova");
-            button.set_valign(gtk4::Align::Start);
+            let label = gtk4::Label::new(Some("testo"));
+            let label2 = gtk4::Label::new(Some("testo2"));
             let box_layout = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
             box_layout.append(&color_picker);
-            box_layout.append(&button);
+            box_layout.append(&label);
+            box_layout.append(&label2);
             grid.attach(&box_layout, 10, 0, 1, 1);
 
             let window = ApplicationWindow::builder()
@@ -241,12 +241,16 @@ impl teal_base::GUI for GtkGUI {
 }
 
 pub struct Context {
+    drawing_area: Option<Rc<DrawingArea>>,
     surface: Option<cairo::ImageSurface>,
 }
 
 impl teal_base::GUIContext for &mut Context {
     /// Produce the screen type that can be used by the backend.
     fn screen(&mut self) -> impl teal_base::ScreenBuffer {
+        // Always queue a draw when a screen is returned.
+        self.drawing_area.as_ref().unwrap().queue_draw();
+
         let format = cairo::Format::Rgb24;
         let surface = self.surface.as_mut().unwrap();
         let stride = format

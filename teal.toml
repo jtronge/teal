@@ -1,0 +1,13 @@
+max_undo = 128
+max_redo = 2
+
+[default_color]
+r = 1.0
+g = 1.0
+b = 1.0
+a = 1.0
+
+[[brushes]]
+name = "a"
+file = "./a.png"
+quickid = 'a'

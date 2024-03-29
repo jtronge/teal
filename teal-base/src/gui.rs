@@ -21,7 +21,7 @@ pub trait GUIContext {
 }
 
 /// Enum representing various types and sequences of key presses
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Key {
     /// An entered key sequence with possible modifiers
     Sequence {
