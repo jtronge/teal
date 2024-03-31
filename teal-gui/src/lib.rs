@@ -42,7 +42,7 @@ where
 
     // Handle gestures.
     let gesture_drag =
-        create_gesture_drag_handler(Rc::clone(&f), Rc::clone(&ctx), Rc::clone(&drawing_area));
+        create_gesture_drag_handler(Rc::clone(&f), Rc::clone(&ctx));
     drawing_area.add_controller(gesture_drag);
     let gesture_click =
         create_gesture_click_handler(Rc::clone(&f), Rc::clone(&ctx), Rc::clone(&drawing_area));
@@ -60,7 +60,6 @@ where
 fn create_gesture_drag_handler<F>(
     f: Rc<F>,
     ctx: Rc<RefCell<Context>>,
-    drawing_area: Rc<DrawingArea>,
 ) -> GestureDrag
 where
     F: Fn(&mut Context, Event) + 'static,
@@ -69,7 +68,6 @@ where
 
     gesture_drag.connect_drag_begin({
         let f = Rc::clone(&f);
-        let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
         move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Begin(x, y)));
@@ -77,7 +75,6 @@ where
     });
     gesture_drag.connect_drag_update({
         let f = Rc::clone(&f);
-        let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
         move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::Update(x, y)));
@@ -85,7 +82,6 @@ where
     });
     gesture_drag.connect_drag_end({
         let f = Rc::clone(&f);
-        let drawing_area = Rc::clone(&drawing_area);
         let ctx = Rc::clone(&ctx);
         move |_gesture_drag, x, y| {
             f(&mut *ctx.borrow_mut(), Event::Drag(DragEvent::End(x, y)));

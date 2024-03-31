@@ -1,5 +1,5 @@
 use teal_base::image::Pixel;
-use teal_base::{Image, ImagePixel, ImageView};
+use teal_base::{Brush, Image, ImagePixel, ImageView};
 use std::collections::HashMap;
 
 /// An operation to be applied to an image.
@@ -16,7 +16,7 @@ pub trait Operation {
 ///
 /// This could be for lines of paint or for more special operations like smudge
 /// and blur.
-pub trait Brush {
+pub trait Liner {
     /// Brush a line from point a to point b.
     fn line(
         &mut self,
@@ -41,19 +41,19 @@ pub struct BrushOp {
     /// Original pixels that have been overwritten, for undo operation.
     undo_pixels: HashMap<(u32, u32), ImagePixel>,
 
-    /// Brush operation.
-    brush_op: Box<dyn Brush>,
+    /// Liner operation.
+    line_op: Box<dyn Liner>,
 }
 
 impl BrushOp {
     /// Create a new drag operation for the current image view.
-    pub fn new<B: Brush + 'static>(image_view: ImageView, brush: B) -> BrushOp {
+    pub fn new<L: Liner + 'static>(image_view: ImageView, liner: L) -> BrushOp {
         BrushOp {
             image_view,
             start: None,
             points: vec![],
             undo_pixels: HashMap::new(),
-            brush_op: Box::new(brush),
+            line_op: Box::new(liner),
         }
     }
 
@@ -72,7 +72,7 @@ impl BrushOp {
         let (last_off_x, last_off_y) = self.points[self.points.len()-1];
         let a = self.get_image_coords(image, last_off_x, last_off_y);
         let b = self.get_image_coords(image, off_x, off_y);
-        self.brush_op.line(image, a, b, &mut self.undo_pixels);
+        self.line_op.line(image, a, b, &mut self.undo_pixels);
         self.points.push((off_x, off_y));
     }
 
@@ -158,14 +158,46 @@ fn fill_dot(
 
 /// A simple paint brush operation.
 pub struct PaintBrush {
+    brush: Brush,
     color: ImagePixel,
 }
 
 impl PaintBrush {
     /// Create a new simple brush from a pixel color.
-    pub fn new(color: ImagePixel) -> PaintBrush {
+    pub fn new(brush: Brush, color: ImagePixel) -> PaintBrush {
         PaintBrush {
+            brush,
             color,
+        }
+    }
+
+    /// Fill the brush around the coordinates (x, y).
+    fn fill(
+        &self,
+        image: &mut Image,
+        x: u32,
+        y: u32,
+        undo_pixels: &mut HashMap<(u32, u32), ImagePixel>,
+    ) {
+        let x = x as i32;
+        let y = y as i32;
+        for (dx, dy, value) in self.brush.iter_values() {
+            let img_x = x + dx;
+            let img_y = y + dy;
+
+            if img_x < 0 || img_y < 0 {
+                return;
+            }
+
+            let img_x: u32 = x.try_into().unwrap();
+            let img_y: u32 = y.try_into().unwrap();
+            if let Some(pixel) = image.get_pixel_mut_checked(img_x, img_y) {
+                let undo_pixel = pixel.clone();
+                pixel.blend(&ImagePixel::from([
+                    self.color.0[0], self.color.0[1], self.color.0[2], value,
+                ]));
+                undo_pixels.entry((img_x, img_y)).or_insert(undo_pixel);
+            }
         }
     }
 }
@@ -173,7 +205,7 @@ impl PaintBrush {
 /// Increment factor for the paint brush operation.
 const PAINT_BRUSH_INCR_FACTOR: f64 = 0.4;
 
-impl Brush for PaintBrush {
+impl Liner for PaintBrush {
     fn line(
         &mut self,
         image: &mut Image,
@@ -201,7 +233,8 @@ impl Brush for PaintBrush {
             }
             let x = x as u32;
             let y = y as u32;
-            fill_dot(image, &self.color, x, y, undo_pixels);
+            // fill_dot(image, &self.color, x, y, undo_pixels);
+            self.fill(image, x, y, undo_pixels);
             t += incr;
         }
     }

@@ -1,10 +1,10 @@
 //! Teal paint
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use teal_base::{
     DragEvent, Event, GUIContext, GUIOptions, Image, ImagePixel, ImageView, Key, KeyEvent,
-    ScreenBuffer, GUI,
+    ScreenBuffer, GUI, Brush,
 };
 use teal_ops::{Operation, BrushOp, PaintBrush};
 
@@ -24,6 +24,9 @@ pub struct InputState {
 
     /// Current color.
     color: Option<ImagePixel>,
+
+    /// Currently selected brush (by quickid).
+    selected_brush: Option<char>,
 }
 
 /// Application data
@@ -43,13 +46,26 @@ pub struct Application {
     /// Undone operations.
     redo_buffer: VecDeque<Box<dyn Operation>>,
 
+    /// Loaded brushes (<quickid, Brush> pairs).
+    brushes: HashMap<char, Brush>,
+
     /// Config file options.
     config: Config,
 }
 
 impl Application {
+    /// Create a new application from a config.
     fn new(config: Config) -> Application {
         let image = Image::new(256, 256);
+
+        // Load brushes.
+        let mut brushes = HashMap::new();
+        for brush_opt in &config.brushes {
+            let brush = Brush::new(&brush_opt.name, &brush_opt.file)
+                .expect(&format!("failed to load brush: {}", brush_opt.name));
+            brushes.insert(brush_opt.quickid, brush);
+        }
+
         Application {
             image,
             image_view: ImageView::new(),
@@ -57,9 +73,11 @@ impl Application {
                 brush: None,
                 key: None,
                 color: None,
+                selected_brush: None,
             },
             undo_buffer: VecDeque::new(),
             redo_buffer: VecDeque::new(),
+            brushes,
             config,
         }
     }
@@ -106,7 +124,7 @@ impl Application {
                 self.take_key_press_action(key.clone(), screen);
                 let _ = self.input_state.key.insert(key);
             }
-            KeyEvent::Release(key) => {
+            KeyEvent::Release(_key) => {
                 let _ = self.input_state.key.take();
             }
         }
@@ -114,7 +132,18 @@ impl Application {
 
     /// Take action for various key press sequences.
     fn take_key_press_action(&mut self, key: Key, screen: impl ScreenBuffer) {
-        if let Key::Sequence { value, control, alt } = key {
+        if let Key::Sequence { value, control: _, alt } = key {
+            // Check if it's a brush action.
+            if alt {
+                if self.brushes.get(&value).is_some() {
+                    let _ = self.input_state.selected_brush.insert(value);
+                } else {
+                    eprintln!("no brush for quickid '{}' found", value);
+                }
+                return;
+            }
+
+            // Check for other commands.
             match value {
                 // Undo an operation.
                 'u' => {
@@ -148,6 +177,12 @@ impl Application {
 
     /// Do a brush operation.
     fn do_brush_op(&mut self, drag_event: DragEvent, screen: impl ScreenBuffer) {
+        if self.input_state.selected_brush.is_none() {
+            eprintln!("No selected brush found; use 'ALT+<quickid>' to select a brush.");
+            return;
+        }
+        let selected_brush = self.input_state.selected_brush.unwrap();
+
         match drag_event {
             DragEvent::Begin(start_x, start_y) => {
                 let color = if let Some(color) = self.input_state.color.as_ref() {
@@ -155,8 +190,11 @@ impl Application {
                 } else {
                     ImagePixel::from([1.0, 1.0, 1.0, 1.0])
                 };
-                let brush = PaintBrush::new(color);
-                let mut brush_op = BrushOp::new(self.image_view.clone(), brush);
+                let brush = self.brushes
+                    .get(&selected_brush)
+                    .expect("failed to find brush");
+                let paint_brush = PaintBrush::new(brush.clone(), color);
+                let mut brush_op = BrushOp::new(self.image_view.clone(), paint_brush);
                 brush_op.start(&mut self.image, start_x, start_y);
                 self.image_view.update_screen(&self.image, screen);
                 let _ = self.input_state.brush.insert(brush_op);

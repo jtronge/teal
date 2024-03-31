@@ -5,6 +5,7 @@
 //! for communication between the backend application and the GUI and are
 //! designed primarily to keep the GUI and the backend separated for easy future
 //! updates.
+use std::path::Path;
 
 /// Rexport the image crate
 pub use image;
@@ -153,4 +154,38 @@ pub trait ScreenBuffer {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn set(&mut self, x: u32, y: u32, pixel: DisplayPixel);
+}
+
+#[derive(Clone)]
+pub struct Brush {
+    name: String,
+    data: Image,
+}
+
+impl Brush {
+    pub fn new<P: AsRef<Path>>(name: &str, path: P) -> image::ImageResult<Brush> {
+        let data = image::open(path)?.into_rgba32f();
+        Ok(Brush {
+            name: name.to_string(),
+            data,
+        })
+    }
+
+    /// Returns iterator with (dx, dy, value), where dx and dy are distances
+    /// from the center of the brush and value is a float from 0.0 - 1.0
+    /// indicating the strength of the brush for that pixel.
+    pub fn iter_values(&self) -> impl Iterator<Item = (i32, i32, f32)> + '_ {
+        let half_width = (self.data.width() / 2) as i32;
+        let half_height = (self.data.height() / 2) as i32;
+        self.data
+            .enumerate_pixels()
+            .map(move |(x, y, pixel)| {
+                let x = x as i32;
+                let y = y as i32;
+                let dx = x - half_width;
+                let dy = y - half_height;
+                let value = 1.0 - (pixel.0[0] + pixel.0[1] + pixel.0[2]) / 3.0;
+                (dx, dy, value)
+            })
+    }
 }
