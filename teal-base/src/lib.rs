@@ -85,6 +85,16 @@ impl ImageView {
         }
     }
 
+    /// Zoom into the image by an internal factor.
+    pub fn zoom_in(&mut self) {
+        self.conversion_factor -= 0.1;
+    }
+
+    /// Zoom out of the image by an internal factor.
+    pub fn zoom_out(&mut self) {
+        self.conversion_factor += 0.1;
+    }
+
     /// Get the image coordinates. Return None on out of bounds.
     pub fn get_image_coords_u_checked(
         &self,
@@ -174,6 +184,7 @@ impl Brush {
     /// Returns iterator with (dx, dy, value), where dx and dy are distances
     /// from the center of the brush and value is a float from 0.0 - 1.0
     /// indicating the strength of the brush for that pixel.
+    #[inline]
     pub fn iter_values(&self) -> impl Iterator<Item = (i32, i32, f32)> + '_ {
         let half_width = (self.data.width() / 2) as i32;
         let half_height = (self.data.height() / 2) as i32;

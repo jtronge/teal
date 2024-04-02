@@ -11,27 +11,25 @@ pub trait Operation {
     fn undo(&mut self, image: &mut Image);
 }
 
-/// Trait to abstract application of some operation that can be applied on a
-/// series of lines on a canvas.
-///
-/// This could be for lines of paint or for more special operations like smudge
-/// and blur.
-pub trait Liner {
-    /// Brush a line from point a to point b.
-    fn line(
+/// Trait designed to handle a drag operation consisting of a set of lines
+/// passed one after another.
+pub trait DragHandler {
+    /// Handle a drag line.
+    fn handle_line(
         &mut self,
         image: &mut Image,
+        image_view: &mut ImageView,
         a: (f64, f64),
         b: (f64, f64),
-        undo_pixels: &mut HashMap<(u32, u32), ImagePixel>,
+        // undo_pixels: &mut HashMap<(u32, u32), ImagePixel>,
     );
+
+    /// Convert to an undoable/redoable operation.
+    fn to_op(&self) -> Option<PixelOp>;
 }
 
-/// Stored representation of a drag gesture.
-pub struct BrushOp {
-    /// Saved image view.
-    image_view: ImageView,
-
+/// Stored representation of a drag input gesture.
+pub struct DragInput {
     /// First screen point.
     start: Option<(f64, f64)>,
 
@@ -41,19 +39,18 @@ pub struct BrushOp {
     /// Original pixels that have been overwritten, for undo operation.
     undo_pixels: HashMap<(u32, u32), ImagePixel>,
 
-    /// Liner operation.
-    line_op: Box<dyn Liner>,
+    /// Drag handler.
+    drag_handler: Box<dyn DragHandler>,
 }
 
-impl BrushOp {
+impl DragInput {
     /// Create a new drag operation for the current image view.
-    pub fn new<L: Liner + 'static>(image_view: ImageView, liner: L) -> BrushOp {
-        BrushOp {
-            image_view,
+    pub fn new<D: DragHandler + 'static>(drag_handler: D) -> DragInput {
+        DragInput {
             start: None,
             points: vec![],
             undo_pixels: HashMap::new(),
-            line_op: Box::new(liner),
+            drag_handler: Box::new(drag_handler),
         }
     }
 
@@ -64,37 +61,46 @@ impl BrushOp {
     }
 
     /// Add the next point to the drag operation, updating the image.
-    pub fn update(&mut self, image: &mut Image, off_x: f64, off_y: f64) {
+    pub fn update(&mut self, image: &mut Image, image_view: &mut ImageView, off_x: f64, off_y: f64) {
         if self.points.len() == 0 {
             panic!("invalid use of BrushOp: start() was not called");
         }
 
         let (last_off_x, last_off_y) = self.points[self.points.len()-1];
-        let a = self.get_image_coords(image, last_off_x, last_off_y);
-        let b = self.get_image_coords(image, off_x, off_y);
-        self.line_op.line(image, a, b, &mut self.undo_pixels);
+        let a = self.get_image_coords(image, image_view, last_off_x, last_off_y);
+        let b = self.get_image_coords(image, image_view, off_x, off_y);
+        self.drag_handler.handle_line(image, image_view, a, b);
         self.points.push((off_x, off_y));
     }
 
     /// Add the final point to the drag operation and update the image.
-    pub fn finish(&mut self, image: &mut Image, off_x: f64, off_y: f64) {
-        self.update(image, off_x, off_y);
+    pub fn finish(&mut self, image: &mut Image, image_view: &mut ImageView, off_x: f64, off_y: f64) {
+        self.update(image, image_view, off_x, off_y);
     }
 
     /// Get image coordinates for the given offsets.
     ///
     /// NOTE: These could potentially be outside the bounds of the actual image.
-    fn get_image_coords(&self, image: &Image, off_x: f64, off_y: f64) -> (f64, f64) {
+    fn get_image_coords(&self, image: &Image, image_view: &ImageView, off_x: f64, off_y: f64) -> (f64, f64) {
         let (start_x, start_y) = self.start
             .as_ref()
             .expect("missing start point");
         let screen_x = start_x + off_x;
         let screen_y = start_y + off_y;
-        self.image_view.get_image_coords_f(image, screen_x, screen_y)
+        image_view.get_image_coords_f(image, screen_x, screen_y)
+    }
+
+    pub fn to_op(self) -> Option<PixelOp> {
+        self.drag_handler.to_op()
     }
 }
 
-impl Operation for BrushOp {
+/// An operation based on updating pixels in the image.
+pub struct PixelOp {
+    undo_pixels: HashMap<(u32, u32), ImagePixel>,
+}
+
+impl Operation for PixelOp {
     fn redo(&mut self, image: &mut Image) {
         // Works since self.undo_pixels will contain the redo pixels.
         self.undo(image);
@@ -113,53 +119,11 @@ impl Operation for BrushOp {
     }
 }
 
-const ROUND_BRUSH: [[f32; 4]; 4] = [
-    [0.0, 0.4, 0.4, 0.0],
-    [0.4, 1.0, 1.0, 0.4],
-    [0.4, 1.0, 1.0, 0.4],
-    [0.0, 0.4, 0.4, 0.0],
-];
-
-/// Fill in a dot around the point from the
-fn fill_dot(
-    image: &mut Image,
-    color: &ImagePixel,
-    img_x: u32,
-    img_y: u32,
-    undo_pixels: &mut HashMap<(u32, u32), ImagePixel>,
-) {
-    let img_x: isize = img_x.try_into().unwrap();
-    let img_y: isize = img_y.try_into().unwrap();
-    let half_dim: isize = (ROUND_BRUSH.len() / 2).try_into().unwrap();
-    for (j, row) in ROUND_BRUSH.iter().enumerate() {
-        for (i, value) in row.iter().enumerate() {
-            let i: isize = i.try_into().unwrap();
-            let j: isize = j.try_into().unwrap();
-
-            let x = img_x + i - half_dim;
-            let y = img_y + j - half_dim;
-            if x < 0 || y < 0 {
-                continue;
-            }
-
-            let x: u32 = x.try_into().unwrap();
-            let y: u32 = y.try_into().unwrap();
-
-            if let Some(pixel) = image.get_pixel_mut_checked(x, y) {
-                let undo_pixel = pixel.clone();
-                pixel.blend(&ImagePixel::from([
-                    color.0[0], color.0[1], color.0[2], *value,
-                ]));
-                undo_pixels.entry((x, y)).or_insert(undo_pixel);
-            }
-        }
-    }
-}
-
 /// A simple paint brush operation.
 pub struct PaintBrush {
     brush: Brush,
     color: ImagePixel,
+    undo_pixels: HashMap<(u32, u32), ImagePixel>,
 }
 
 impl PaintBrush {
@@ -168,35 +132,33 @@ impl PaintBrush {
         PaintBrush {
             brush,
             color,
+            undo_pixels: HashMap::new(),
         }
     }
 
     /// Fill the brush around the coordinates (x, y).
     fn fill(
-        &self,
+        &mut self,
         image: &mut Image,
-        x: u32,
-        y: u32,
-        undo_pixels: &mut HashMap<(u32, u32), ImagePixel>,
+        x: i32,
+        y: i32,
     ) {
-        let x = x as i32;
-        let y = y as i32;
         for (dx, dy, value) in self.brush.iter_values() {
             let img_x = x + dx;
             let img_y = y + dy;
 
             if img_x < 0 || img_y < 0 {
-                return;
+                continue;
             }
 
-            let img_x: u32 = x.try_into().unwrap();
-            let img_y: u32 = y.try_into().unwrap();
+            let img_x: u32 = img_x.try_into().unwrap();
+            let img_y: u32 = img_y.try_into().unwrap();
             if let Some(pixel) = image.get_pixel_mut_checked(img_x, img_y) {
                 let undo_pixel = pixel.clone();
                 pixel.blend(&ImagePixel::from([
                     self.color.0[0], self.color.0[1], self.color.0[2], value,
                 ]));
-                undo_pixels.entry((img_x, img_y)).or_insert(undo_pixel);
+                self.undo_pixels.entry((img_x, img_y)).or_insert(undo_pixel);
             }
         }
     }
@@ -205,13 +167,13 @@ impl PaintBrush {
 /// Increment factor for the paint brush operation.
 const PAINT_BRUSH_INCR_FACTOR: f64 = 0.4;
 
-impl Liner for PaintBrush {
-    fn line(
+impl DragHandler for PaintBrush {
+    fn handle_line(
         &mut self,
         image: &mut Image,
+        _image_view: &mut ImageView,
         a: (f64, f64),
         b: (f64, f64),
-        undo_pixels: &mut HashMap<(u32, u32), ImagePixel>,
     ) {
         let alpha = b.0 - a.0;
         let beta = b.1 - a.1;
@@ -228,14 +190,15 @@ impl Liner for PaintBrush {
         while t < 1.0 {
             let x = a.0 + t * alpha;
             let y = a.1 + t * beta;
-            if x < 0.0 || y < 0.0 {
-                continue;
-            }
-            let x = x as u32;
-            let y = y as u32;
             // fill_dot(image, &self.color, x, y, undo_pixels);
-            self.fill(image, x, y, undo_pixels);
+            self.fill(image, x as i32, y as i32);
             t += incr;
         }
+    }
+
+    fn to_op(&self) -> Option<PixelOp> {
+        Some(PixelOp {
+            undo_pixels: self.undo_pixels.clone(),
+        })
     }
 }

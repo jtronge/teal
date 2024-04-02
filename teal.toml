@@ -11,3 +11,8 @@ a = 1.0
 name = "a"
 file = "./a.png"
 quickid = 'a'
+
+[[brushes]]
+name = "b"
+file = "./b.png"
+quickid = 'b'

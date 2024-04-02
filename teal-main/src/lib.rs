@@ -6,7 +6,7 @@ use teal_base::{
     DragEvent, Event, GUIContext, GUIOptions, Image, ImagePixel, ImageView, Key, KeyEvent,
     ScreenBuffer, GUI, Brush,
 };
-use teal_ops::{Operation, BrushOp, PaintBrush};
+use teal_ops::{DragInput, Operation, PaintBrush};
 
 mod config;
 pub use config::Config;
@@ -16,8 +16,8 @@ pub use config::Config;
 /// This is used to control and store state info about events that are
 /// currently being handled.
 pub struct InputState {
-    /// Holds brush operation, if in progress.
-    brush: Option<BrushOp>,
+    /// Holds in-progress drag operation.
+    drag: Option<DragInput>,
 
     /// Holds current key press, removed when released.
     key: Option<Key>,
@@ -70,7 +70,7 @@ impl Application {
             image,
             image_view: ImageView::new(),
             input_state: InputState {
-                brush: None,
+                drag: None,
                 key: None,
                 color: None,
                 selected_brush: None,
@@ -156,7 +156,7 @@ impl Application {
                     }
                 }
                 // Redo an operation.
-                'U' => {
+                'r' => {
                     if let Some(mut last_op) = self.redo_buffer.pop_back() {
                         last_op.redo(&mut self.image);
                         self.undo_buffer.push_back(last_op);
@@ -165,67 +165,89 @@ impl Application {
                         println!("no more operations to redo");
                     }
                 }
+                // Save the image.
+                's' => {
+                    self.image.save("out.exr").expect("failed to save image");
+                }
+                // Zoom in some.
+                'z' => {
+                    self.image_view.zoom_in();
+                    self.image_view.update_screen(&self.image, screen);
+                }
+                // Zoom out some.
+                'x' => {
+                    self.image_view.zoom_out();
+                    self.image_view.update_screen(&self.image, screen);
+                }
+                _ => (),
                 _ => (),
             }
         }
     }
 
-    /// Handle a drag event.
-    fn handle_drag_event(&mut self, drag_event: DragEvent, screen: impl ScreenBuffer) {
-        self.do_brush_op(drag_event, screen);
+    /// Create the drag input handler.
+    fn create_drag_input(&self) -> Option<DragInput> {
+        if let Some(Key::PlainControl) = self.input_state.key {
+            // TODO: This needs a drag handler that will translate the view.
+            None
+        } else {
+            // Create an image operation drag handler.
+            if self.input_state.selected_brush.is_none() {
+                eprintln!("No selected brush found; use 'ALT+<quickid>' to select a brush.");
+                return None;
+            }
+            let selected_brush = self.input_state.selected_brush.unwrap();
+            let brush = self.brushes
+                .get(&selected_brush)
+                .expect("failed to find brush");
+            let color = if let Some(color) = self.input_state.color.as_ref() {
+                color.clone()
+            } else {
+                ImagePixel::from([1.0, 1.0, 1.0, 1.0])
+            };
+            let paint_brush = PaintBrush::new(brush.clone(), color);
+            Some(DragInput::new(paint_brush))
+        }
     }
 
-    /// Do a brush operation.
-    fn do_brush_op(&mut self, drag_event: DragEvent, screen: impl ScreenBuffer) {
-        if self.input_state.selected_brush.is_none() {
-            eprintln!("No selected brush found; use 'ALT+<quickid>' to select a brush.");
-            return;
-        }
-        let selected_brush = self.input_state.selected_brush.unwrap();
-
+    /// Handle a drag event.
+    fn handle_drag_event(&mut self, drag_event: DragEvent, screen: impl ScreenBuffer) {
         match drag_event {
             DragEvent::Begin(start_x, start_y) => {
-                let color = if let Some(color) = self.input_state.color.as_ref() {
-                    color.clone()
-                } else {
-                    ImagePixel::from([1.0, 1.0, 1.0, 1.0])
-                };
-                let brush = self.brushes
-                    .get(&selected_brush)
-                    .expect("failed to find brush");
-                let paint_brush = PaintBrush::new(brush.clone(), color);
-                let mut brush_op = BrushOp::new(self.image_view.clone(), paint_brush);
-                brush_op.start(&mut self.image, start_x, start_y);
-                self.image_view.update_screen(&self.image, screen);
-                let _ = self.input_state.brush.insert(brush_op);
+                // First determine what drag handler to use.
+                if let Some(mut drag) = self.create_drag_input() {
+                    drag.start(&mut self.image, start_x, start_y);
+                    self.image_view.update_screen(&self.image, screen);
+                    let _ = self.input_state.drag.insert(drag);
+                }
             }
             DragEvent::Update(x, y) => {
-                let brush_op = self
-                    .input_state
-                    .brush
-                    .as_mut()
-                    .expect("encountered unexpected drag update");
-                brush_op.update(&mut self.image, x, y);
-                self.image_view.update_screen(&self.image, screen);
+                if let Some(drag) = self.input_state.drag.as_mut() {
+                    drag.update(&mut self.image, &mut self.image_view, x, y);
+                    self.image_view.update_screen(&self.image, screen);
+                }
             }
             DragEvent::End(x, y) => {
-                let mut brush_op = self
-                    .input_state
-                    .brush
-                    .take()
-                    .expect("encountered unexpected drag end");
-                brush_op.finish(&mut self.image, x, y);
-                // Drag operation completed, save it for undo later.
-                self.undo_buffer.push_back(Box::new(brush_op));
-                self.image_view.update_screen(&self.image, screen);
+                if let Some(mut drag) = self.input_state.drag.take() {
+                    drag.finish(&mut self.image, &mut self.image_view, x, y);
+                    // Drag input complete, save it for undo later, if necessary.
+                    if let Some(drag_op) = drag.to_op() {
+                        self.undo_buffer.push_back(Box::new(drag_op));
+                    }
+                    self.image_view.update_screen(&self.image, screen);
+                }
             }
         }
     }
 }
 
+pub struct Args {
+    pub fname: String,
+}
+
 // NOTE: I don't want anything too fancy here; I want something that works and
 // that can slowly be refactored to perfection.
-pub fn run<G: GUI>(mut gui: G, config: Config) {
+pub fn run<G: GUI>(args: Args, config: Config, mut gui: G) {
     let app = Rc::new(RefCell::new(Application::new(config)));
 
     let options = GUIOptions {};
