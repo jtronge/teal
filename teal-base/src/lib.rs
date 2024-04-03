@@ -19,6 +19,21 @@ pub type ImagePixel = image::Rgba<f32>;
 /// Main image type
 pub type Image = image::ImageBuffer<ImagePixel, Vec<<ImagePixel as image::Pixel>::Subpixel>>;
 
+/// Load an image file and convert it to the proper format.
+pub fn load_image<P: AsRef<Path>>(path: P) -> Option<Image> {
+    if let Ok(image) = image::io::Reader::open(path) {
+        let image = image
+            .with_guessed_format()
+            .expect("failed to determine image format")
+            .decode()
+            .expect("failed to decode image")
+            .into_rgba32f();
+        Some(image)
+    } else {
+        None
+    }
+}
+
 /// Pixel to be used for display.
 #[derive(Clone, Debug)]
 pub struct DisplayPixel {
@@ -66,13 +81,13 @@ fn checkerboard(screen_x: u32, screen_y: u32) -> DisplayPixel {
 /// buffer and backend image data.
 #[derive(Clone, Debug)]
 pub struct ImageView {
-    /// X-position of upper left corner of image in view
+    /// X-position of upper left corner of image in view (in screen coords).
     disp_corner_x: f64,
 
-    /// Y-position of upper left corner of image in view
+    /// Y-position of upper left corner of image in view (in screen coords).
     disp_corner_y: f64,
 
-    /// Conversion factor from display coordinates to image coordinates
+    /// Conversion factor from display coordinates to image coordinates.
     conversion_factor: f64,
 }
 
@@ -86,13 +101,23 @@ impl ImageView {
     }
 
     /// Zoom into the image by an internal factor.
-    pub fn zoom_in(&mut self) {
-        self.conversion_factor -= 0.1;
+    pub fn zoom_in(&mut self, width: u32, height: u32) {
+        self.conversion_factor /= 1.1;
+        self.disp_corner_x *= 1.1;
+        self.disp_corner_y *= 1.1;
     }
 
     /// Zoom out of the image by an internal factor.
-    pub fn zoom_out(&mut self) {
-        self.conversion_factor += 0.1;
+    pub fn zoom_out(&mut self, width: u32, height: u32) {
+        self.conversion_factor *= 1.1;
+        self.disp_corner_x /= 1.1;
+        self.disp_corner_y /= 1.1;
+    }
+
+    /// Translate the view by vector (dx, dy) in screen coordinates.
+    pub fn translate(&mut self, dx: f64, dy: f64) {
+        self.disp_corner_x += dx;
+        self.disp_corner_y += dy;
     }
 
     /// Get the image coordinates. Return None on out of bounds.
@@ -110,8 +135,8 @@ impl ImageView {
             return None;
         }
 
-        let img_x = x * self.conversion_factor;
-        let img_y = y * self.conversion_factor;
+        let img_x = (x - self.disp_corner_x) * self.conversion_factor;
+        let img_y = (y - self.disp_corner_y) * self.conversion_factor;
         let img_x = img_x as u32;
         let img_y = img_y as u32;
 
@@ -124,20 +149,16 @@ impl ImageView {
     }
 
     /// Get the image coordinates, unchecked and floating-point version.
-    pub fn get_image_coords_f(
-        &self,
-        image: &Image,
-        screen_x: f64,
-        screen_y: f64,
-    ) -> (f64, f64) {
-       (screen_x * self.conversion_factor, screen_y * self.conversion_factor)
+    pub fn get_image_coords_f(&self, image: &Image, screen_x: f64, screen_y: f64) -> (f64, f64) {
+        (
+            (screen_x - self.disp_corner_x) * self.conversion_factor,
+            (screen_y - self.disp_corner_y) * self.conversion_factor,
+        )
     }
 
     /// Get a display pixel for the screen coordinates.
     pub fn get_display_pixel(&self, image: &Image, screen_x: u32, screen_y: u32) -> DisplayPixel {
-        if let Some((img_x, img_y))
-            = self.get_image_coords_u_checked(image, screen_x, screen_y)
-        {
+        if let Some((img_x, img_y)) = self.get_image_coords_u_checked(image, screen_x, screen_y) {
             DisplayPixel::from_image_pixel(image.get_pixel(img_x, img_y))
         } else {
             checkerboard(screen_x, screen_y)
@@ -188,15 +209,13 @@ impl Brush {
     pub fn iter_values(&self) -> impl Iterator<Item = (i32, i32, f32)> + '_ {
         let half_width = (self.data.width() / 2) as i32;
         let half_height = (self.data.height() / 2) as i32;
-        self.data
-            .enumerate_pixels()
-            .map(move |(x, y, pixel)| {
-                let x = x as i32;
-                let y = y as i32;
-                let dx = x - half_width;
-                let dy = y - half_height;
-                let value = 1.0 - (pixel.0[0] + pixel.0[1] + pixel.0[2]) / 3.0;
-                (dx, dy, value)
-            })
+        self.data.enumerate_pixels().map(move |(x, y, pixel)| {
+            let x = x as i32;
+            let y = y as i32;
+            let dx = x - half_width;
+            let dy = y - half_height;
+            let value = 1.0 - (pixel.0[0] + pixel.0[1] + pixel.0[2]) / 3.0;
+            (dx, dy, value)
+        })
     }
 }

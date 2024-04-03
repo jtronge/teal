@@ -1,3 +1,4 @@
+backup = true
 max_undo = 128
 max_redo = 2
 

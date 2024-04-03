@@ -1,4 +1,5 @@
 //! Generic GUI traits and data structures.
+use std::process::ExitCode;
 
 /// Options for the GUI.
 pub struct GUIOptions {}
@@ -10,7 +11,11 @@ pub struct GUIOptions {}
 pub trait GUI {
     type Context<'a>: GUIContext;
 
-    fn run<F: Fn(Self::Context<'_>, Event) + 'static>(&mut self, options: GUIOptions, f: F);
+    fn run<F: Fn(Self::Context<'_>, Event) + 'static>(
+        &mut self,
+        options: GUIOptions,
+        f: F,
+    ) -> ExitCode;
 }
 
 /// GUI context for interacting with the GUI front end.

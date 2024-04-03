@@ -5,6 +5,7 @@ use gtk4::{
     Application, ApplicationWindow, DrawingArea, EventControllerKey, GestureClick, GestureDrag,
 };
 use std::cell::RefCell;
+use std::process::ExitCode;
 use std::rc::Rc;
 use teal_base::{DragEvent, Event, Key, KeyEvent};
 
@@ -17,7 +18,10 @@ where
 {
     let drawing_area = Rc::new(DrawingArea::new());
     // Save the drawing area for queue_draw() calls later.
-    let _ = ctx.borrow_mut().drawing_area.insert(Rc::clone(&drawing_area));
+    let _ = ctx
+        .borrow_mut()
+        .drawing_area
+        .insert(Rc::clone(&drawing_area));
 
     // Handle a resize.
     drawing_area.connect_resize({
@@ -41,8 +45,7 @@ where
     });
 
     // Handle gestures.
-    let gesture_drag =
-        create_gesture_drag_handler(Rc::clone(&f), Rc::clone(&ctx));
+    let gesture_drag = create_gesture_drag_handler(Rc::clone(&f), Rc::clone(&ctx));
     drawing_area.add_controller(gesture_drag);
     let gesture_click =
         create_gesture_click_handler(Rc::clone(&f), Rc::clone(&ctx), Rc::clone(&drawing_area));
@@ -57,10 +60,7 @@ where
 }
 
 /// Setup controller for gesture dragging.
-fn create_gesture_drag_handler<F>(
-    f: Rc<F>,
-    ctx: Rc<RefCell<Context>>,
-) -> GestureDrag
+fn create_gesture_drag_handler<F>(f: Rc<F>, ctx: Rc<RefCell<Context>>) -> GestureDrag
 where
     F: Fn(&mut Context, Event) + 'static,
 {
@@ -197,14 +197,17 @@ impl GtkGUI {
 impl teal_base::GUI for GtkGUI {
     type Context<'a> = &'a mut Context;
 
-    fn run<F>(&mut self, _options: teal_base::GUIOptions, f: F)
+    fn run<F>(&mut self, _options: teal_base::GUIOptions, f: F) -> ExitCode
     where
         F: Fn(Self::Context<'_>, Event) + 'static,
     {
         let app = Application::builder()
             .application_id("org.teal.Teal")
             .build();
-        let ctx = Rc::new(RefCell::new(Context { drawing_area: None, surface: None }));
+        let ctx = Rc::new(RefCell::new(Context {
+            drawing_area: None,
+            surface: None,
+        }));
         let f = Rc::new(f);
 
         app.connect_activate(move |app| {
@@ -232,7 +235,10 @@ impl teal_base::GUI for GtkGUI {
             window.present();
         });
 
-        app.run();
+        // Must use run_with_args() to ensure that GTK doesn't touch the args.
+        app.run_with_args::<&str>(&[]);
+
+        ExitCode::SUCCESS
     }
 }
 

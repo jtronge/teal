@@ -32,6 +32,9 @@ pub struct Color {
 /// Main application config.
 #[derive(Deserialize)]
 pub struct Config {
+    /// Should teal make a backup of the image?
+    pub backup: bool,
+
     /// Maximum number of operations in the undo buffer.
     pub max_undo: usize,
 

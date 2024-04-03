@@ -1,15 +1,23 @@
 //! Teal paint
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
+use std::process::ExitCode;
 use std::rc::Rc;
 use teal_base::{
-    DragEvent, Event, GUIContext, GUIOptions, Image, ImagePixel, ImageView, Key, KeyEvent,
-    ScreenBuffer, GUI, Brush,
+    Brush, DragEvent, Event, GUIContext, GUIOptions, Image, ImagePixel, ImageView, Key, KeyEvent,
+    ScreenBuffer, GUI,
 };
-use teal_ops::{DragInput, Operation, PaintBrush};
+use teal_ops::{DragInput, Operation, PaintBrush, ViewDragHandler};
 
 mod config;
 pub use config::Config;
+
+/// CLI arguments.
+pub struct Args {
+    pub fname: String,
+    pub dims: Option<(u32, u32)>,
+}
 
 /// Current input state.
 ///
@@ -31,6 +39,9 @@ pub struct InputState {
 
 /// Application data
 pub struct Application {
+    /// Image path.
+    image_path: PathBuf,
+
     /// Actual image data being operated on.
     image: Image,
 
@@ -55,8 +66,31 @@ pub struct Application {
 
 impl Application {
     /// Create a new application from a config.
-    fn new(config: Config) -> Application {
-        let image = Image::new(256, 256);
+    fn new(args: Args, config: Config) -> Application {
+        let image_path = PathBuf::from(args.fname);
+        let image = if let Some(image) = teal_base::load_image(&image_path) {
+            if config.backup {
+                // Make a backup of the old image.
+                let ext = image_path
+                    .extension()
+                    .expect("image is missing an extension")
+                    .to_str()
+                    .expect("failed to decode extension into unicode string")
+                    .to_string();
+                let mut backup_path = image_path.clone();
+                backup_path.set_extension(format!("teal_backup.{ext}"));
+                image
+                    .save(&backup_path)
+                    .expect("failed to save backup image");
+            }
+            image
+        } else {
+            if let Some((width, height)) = args.dims {
+                Image::new(width, height)
+            } else {
+                panic!("missing width and height dimensions for creating new image");
+            }
+        };
 
         // Load brushes.
         let mut brushes = HashMap::new();
@@ -67,6 +101,7 @@ impl Application {
         }
 
         Application {
+            image_path,
             image,
             image_view: ImageView::new(),
             input_state: InputState {
@@ -132,7 +167,12 @@ impl Application {
 
     /// Take action for various key press sequences.
     fn take_key_press_action(&mut self, key: Key, screen: impl ScreenBuffer) {
-        if let Key::Sequence { value, control: _, alt } = key {
+        if let Key::Sequence {
+            value,
+            control: _,
+            alt,
+        } = key
+        {
             // Check if it's a brush action.
             if alt {
                 if self.brushes.get(&value).is_some() {
@@ -167,16 +207,18 @@ impl Application {
                 }
                 // Save the image.
                 's' => {
-                    self.image.save("out.exr").expect("failed to save image");
+                    self.image
+                        .save(&self.image_path)
+                        .expect("failed to save image");
                 }
                 // Zoom in some.
                 'z' => {
-                    self.image_view.zoom_in();
+                    self.image_view.zoom_in(screen.width(), screen.height());
                     self.image_view.update_screen(&self.image, screen);
                 }
                 // Zoom out some.
                 'x' => {
-                    self.image_view.zoom_out();
+                    self.image_view.zoom_out(screen.width(), screen.height());
                     self.image_view.update_screen(&self.image, screen);
                 }
                 _ => (),
@@ -188,8 +230,9 @@ impl Application {
     /// Create the drag input handler.
     fn create_drag_input(&self) -> Option<DragInput> {
         if let Some(Key::PlainControl) = self.input_state.key {
-            // TODO: This needs a drag handler that will translate the view.
-            None
+            // This needs a drag handler that will translate the view.
+            let view_handler = ViewDragHandler::new();
+            Some(DragInput::new(view_handler))
         } else {
             // Create an image operation drag handler.
             if self.input_state.selected_brush.is_none() {
@@ -197,7 +240,8 @@ impl Application {
                 return None;
             }
             let selected_brush = self.input_state.selected_brush.unwrap();
-            let brush = self.brushes
+            let brush = self
+                .brushes
                 .get(&selected_brush)
                 .expect("failed to find brush");
             let color = if let Some(color) = self.input_state.color.as_ref() {
@@ -214,7 +258,7 @@ impl Application {
     fn handle_drag_event(&mut self, drag_event: DragEvent, screen: impl ScreenBuffer) {
         match drag_event {
             DragEvent::Begin(start_x, start_y) => {
-                // First determine what drag handler to use.
+                // First create drag input and handler.
                 if let Some(mut drag) = self.create_drag_input() {
                     drag.start(&mut self.image, start_x, start_y);
                     self.image_view.update_screen(&self.image, screen);
@@ -241,18 +285,14 @@ impl Application {
     }
 }
 
-pub struct Args {
-    pub fname: String,
-}
-
 // NOTE: I don't want anything too fancy here; I want something that works and
 // that can slowly be refactored to perfection.
-pub fn run<G: GUI>(args: Args, config: Config, mut gui: G) {
-    let app = Rc::new(RefCell::new(Application::new(config)));
+pub fn run<G: GUI>(args: Args, config: Config, mut gui: G) -> ExitCode {
+    let app = Rc::new(RefCell::new(Application::new(args, config)));
 
     let options = GUIOptions {};
     // TODO: Simply update the screen with changes to an image made from here
     gui.run(options, move |ctx, event| {
         app.borrow_mut().handle_event(ctx, event);
-    });
+    })
 }

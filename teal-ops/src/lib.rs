@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use teal_base::image::Pixel;
 use teal_base::{Brush, Image, ImagePixel, ImageView};
-use std::collections::HashMap;
 
 /// An operation to be applied to an image.
 pub trait Operation {
@@ -61,12 +61,18 @@ impl DragInput {
     }
 
     /// Add the next point to the drag operation, updating the image.
-    pub fn update(&mut self, image: &mut Image, image_view: &mut ImageView, off_x: f64, off_y: f64) {
+    pub fn update(
+        &mut self,
+        image: &mut Image,
+        image_view: &mut ImageView,
+        off_x: f64,
+        off_y: f64,
+    ) {
         if self.points.len() == 0 {
             panic!("invalid use of BrushOp: start() was not called");
         }
 
-        let (last_off_x, last_off_y) = self.points[self.points.len()-1];
+        let (last_off_x, last_off_y) = self.points[self.points.len() - 1];
         let a = self.get_image_coords(image, image_view, last_off_x, last_off_y);
         let b = self.get_image_coords(image, image_view, off_x, off_y);
         self.drag_handler.handle_line(image, image_view, a, b);
@@ -74,17 +80,27 @@ impl DragInput {
     }
 
     /// Add the final point to the drag operation and update the image.
-    pub fn finish(&mut self, image: &mut Image, image_view: &mut ImageView, off_x: f64, off_y: f64) {
+    pub fn finish(
+        &mut self,
+        image: &mut Image,
+        image_view: &mut ImageView,
+        off_x: f64,
+        off_y: f64,
+    ) {
         self.update(image, image_view, off_x, off_y);
     }
 
     /// Get image coordinates for the given offsets.
     ///
     /// NOTE: These could potentially be outside the bounds of the actual image.
-    fn get_image_coords(&self, image: &Image, image_view: &ImageView, off_x: f64, off_y: f64) -> (f64, f64) {
-        let (start_x, start_y) = self.start
-            .as_ref()
-            .expect("missing start point");
+    fn get_image_coords(
+        &self,
+        image: &Image,
+        image_view: &ImageView,
+        off_x: f64,
+        off_y: f64,
+    ) -> (f64, f64) {
+        let (start_x, start_y) = self.start.as_ref().expect("missing start point");
         let screen_x = start_x + off_x;
         let screen_y = start_y + off_y;
         image_view.get_image_coords_f(image, screen_x, screen_y)
@@ -137,12 +153,7 @@ impl PaintBrush {
     }
 
     /// Fill the brush around the coordinates (x, y).
-    fn fill(
-        &mut self,
-        image: &mut Image,
-        x: i32,
-        y: i32,
-    ) {
+    fn fill(&mut self, image: &mut Image, x: i32, y: i32) {
         for (dx, dy, value) in self.brush.iter_values() {
             let img_x = x + dx;
             let img_y = y + dy;
@@ -156,7 +167,10 @@ impl PaintBrush {
             if let Some(pixel) = image.get_pixel_mut_checked(img_x, img_y) {
                 let undo_pixel = pixel.clone();
                 pixel.blend(&ImagePixel::from([
-                    self.color.0[0], self.color.0[1], self.color.0[2], value,
+                    self.color.0[0],
+                    self.color.0[1],
+                    self.color.0[2],
+                    self.color.0[3] * value,
                 ]));
                 self.undo_pixels.entry((img_x, img_y)).or_insert(undo_pixel);
             }
@@ -200,5 +214,34 @@ impl DragHandler for PaintBrush {
         Some(PixelOp {
             undo_pixels: self.undo_pixels.clone(),
         })
+    }
+}
+
+/// Drag handler used for translating the view.
+pub struct ViewDragHandler;
+
+impl ViewDragHandler {
+    pub fn new() -> ViewDragHandler {
+        ViewDragHandler
+    }
+}
+
+impl DragHandler for ViewDragHandler {
+    /// Handle a drag line by translating the view along the vector path.
+    fn handle_line(
+        &mut self,
+        _image: &mut Image,
+        image_view: &mut ImageView,
+        a: (f64, f64),
+        b: (f64, f64),
+    ) {
+        let dx = b.0 - a.0;
+        let dy = b.1 - a.1;
+        image_view.translate(dx, dy);
+    }
+
+    /// No operation to undo for the view drag handler.
+    fn to_op(&self) -> Option<PixelOp> {
+        None
     }
 }
