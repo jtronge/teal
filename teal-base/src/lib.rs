@@ -96,7 +96,7 @@ impl ImageView {
         ImageView {
             disp_corner_x: 0.0,
             disp_corner_y: 0.0,
-            conversion_factor: 0.5,
+            conversion_factor: 1.0,
         }
     }
 

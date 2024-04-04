@@ -19,3 +19,4 @@ path = "teal.rs"
 teal-main = { path = "./teal-main" }
 teal-gui = { path = "./teal-gui" }
 toml = "0.8.12"
+clap = { version = "4.5.4", features = ["derive"] }
