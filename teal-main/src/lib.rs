@@ -12,6 +12,7 @@ use teal_ops::{DragInput, Operation, PaintBrush, ViewDragHandler};
 
 mod config;
 pub use config::Config;
+mod command;
 
 /// CLI arguments.
 pub struct Args {
@@ -29,6 +30,9 @@ pub struct InputState {
 
     /// Holds current key press, removed when released.
     key: Option<Key>,
+
+    /// Command state handling incoming key presses.
+    command: command::CommandState,
 
     /// Current color.
     color: Option<ImagePixel>,
@@ -106,6 +110,7 @@ impl Application {
             image_view: ImageView::new(),
             input_state: InputState {
                 drag: None,
+                command: command::CommandState::new(),
                 key: None,
                 color: None,
                 selected_brush: None,
@@ -156,6 +161,7 @@ impl Application {
     fn handle_key_event(&mut self, key_event: KeyEvent, screen: impl ScreenBuffer) {
         match key_event {
             KeyEvent::Press(key) => {
+                self.input_state.key_state.handle(key.clone());
                 self.take_key_press_action(key.clone(), screen);
                 let _ = self.input_state.key.insert(key);
             }
