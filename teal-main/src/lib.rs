@@ -20,11 +20,17 @@ pub struct Args {
     pub dims: Option<(u32, u32)>,
 }
 
-/// Current input state.
-///
-/// This is used to control and store state info about events that are
-/// currently being handled.
-pub struct InputState {
+/// Application data
+pub struct Application {
+    /// Image path.
+    image_path: PathBuf,
+
+    /// Actual image data being operated on.
+    image: Image,
+
+    /// Image view, tranforming the image for view on the screen.
+    image_view: ImageView,
+
     /// Holds in-progress drag operation.
     drag: Option<DragInput>,
 
@@ -39,21 +45,6 @@ pub struct InputState {
 
     /// Currently selected brush (by quickid).
     selected_brush: Option<char>,
-}
-
-/// Application data
-pub struct Application {
-    /// Image path.
-    image_path: PathBuf,
-
-    /// Actual image data being operated on.
-    image: Image,
-
-    /// Image view, tranforming the image for view on the screen.
-    image_view: ImageView,
-
-    /// Current input state of the system.
-    input_state: InputState,
 
     /// Completed operations.
     undo_buffer: VecDeque<Box<dyn Operation>>,
@@ -71,6 +62,7 @@ pub struct Application {
 impl Application {
     /// Create a new application from a config.
     fn new(args: Args, config: Config) -> Application {
+        // Load or create the image.
         let image_path = PathBuf::from(args.fname);
         let image = if let Some(image) = teal_base::load_image(&image_path) {
             if config.backup {
@@ -108,13 +100,11 @@ impl Application {
             image_path,
             image,
             image_view: ImageView::new(),
-            input_state: InputState {
-                drag: None,
-                command: command::CommandState::new(),
-                key: None,
-                color: None,
-                selected_brush: None,
-            },
+            drag: None,
+            command: command::CommandState::new(),
+            key: None,
+            color: None,
+            selected_brush: None,
             undo_buffer: VecDeque::new(),
             redo_buffer: VecDeque::new(),
             brushes,
@@ -135,7 +125,6 @@ impl Application {
             }
             Event::ColorUpdate { r, g, b, a } => {
                 let _ = self
-                    .input_state
                     .color
                     .insert(ImagePixel::from([r, g, b, a]));
             }
@@ -150,7 +139,6 @@ impl Application {
             let new_size = self.config.max_undo / 2;
             let _ = self.undo_buffer.drain(0..new_size);
         }
-
         if self.redo_buffer.len() > self.config.max_redo {
             let new_size = self.config.max_redo / 2;
             let _ = self.redo_buffer.drain(0..new_size);
@@ -161,12 +149,13 @@ impl Application {
     fn handle_key_event(&mut self, key_event: KeyEvent, screen: impl ScreenBuffer) {
         match key_event {
             KeyEvent::Press(key) => {
-                self.input_state.key_state.handle(key.clone());
+                // Determine if the key should cause a command to run.
+                self.command.handle(key.clone());
                 self.take_key_press_action(key.clone(), screen);
-                let _ = self.input_state.key.insert(key);
+                let _ = self.key.insert(key);
             }
             KeyEvent::Release(_key) => {
-                let _ = self.input_state.key.take();
+                let _ = self.key.take();
             }
         }
     }
@@ -182,7 +171,7 @@ impl Application {
             // Check if it's a brush action.
             if alt {
                 if self.brushes.get(&value).is_some() {
-                    let _ = self.input_state.selected_brush.insert(value);
+                    let _ = self.selected_brush.insert(value);
                 } else {
                     eprintln!("no brush for quickid '{}' found", value);
                 }
@@ -235,22 +224,22 @@ impl Application {
 
     /// Create the drag input handler.
     fn create_drag_input(&self) -> Option<DragInput> {
-        if let Some(Key::PlainControl) = self.input_state.key {
+        if let Some(Key::PlainControl) = self.key {
             // This needs a drag handler that will translate the view.
             let view_handler = ViewDragHandler::new();
             Some(DragInput::new(view_handler))
         } else {
             // Create an image operation drag handler.
-            if self.input_state.selected_brush.is_none() {
+            if self.selected_brush.is_none() {
                 eprintln!("No selected brush found; use 'ALT+<quickid>' to select a brush.");
                 return None;
             }
-            let selected_brush = self.input_state.selected_brush.unwrap();
+            let selected_brush = self.selected_brush.unwrap();
             let brush = self
                 .brushes
                 .get(&selected_brush)
                 .expect("failed to find brush");
-            let color = if let Some(color) = self.input_state.color.as_ref() {
+            let color = if let Some(color) = self.color.as_ref() {
                 color.clone()
             } else {
                 ImagePixel::from([1.0, 1.0, 1.0, 1.0])
@@ -268,17 +257,17 @@ impl Application {
                 if let Some(mut drag) = self.create_drag_input() {
                     drag.start(&mut self.image, start_x, start_y);
                     self.image_view.update_screen(&self.image, screen);
-                    let _ = self.input_state.drag.insert(drag);
+                    let _ = self.drag.insert(drag);
                 }
             }
             DragEvent::Update(x, y) => {
-                if let Some(drag) = self.input_state.drag.as_mut() {
+                if let Some(drag) = self.drag.as_mut() {
                     drag.update(&mut self.image, &mut self.image_view, x, y);
                     self.image_view.update_screen(&self.image, screen);
                 }
             }
             DragEvent::End(x, y) => {
-                if let Some(mut drag) = self.input_state.drag.take() {
+                if let Some(mut drag) = self.drag.take() {
                     drag.finish(&mut self.image, &mut self.image_view, x, y);
                     // Drag input complete, save it for undo later, if necessary.
                     if let Some(drag_op) = drag.to_op() {

@@ -13,3 +13,8 @@ impl CommandState {
         // TODO
     }
 }
+
+/// Commands to be executed by the application.
+pub enum Command {
+    ChooseBrush { quickid: char },
+}
