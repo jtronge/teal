@@ -17,3 +17,13 @@ quickid = 'a'
 name = "b"
 file = "./b.png"
 quickid = 'b'
+
+[[brushes]]
+name = "8x8"
+file = "./brushes/8x8.exr"
+quickid = '1'
+
+[[brushes]]
+name = "12x12"
+file = "./brushes/12x12.exr"
+quickid = '2'
